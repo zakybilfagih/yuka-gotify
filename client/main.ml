@@ -11,6 +11,9 @@ let after : int -> (unit -> unit) -> unit -> unit =
 let overflows : string -> bool =
   [%mel.raw {|function (id) { var e = document.getElementById(id); return !!e && e.scrollHeight > e.clientHeight + 1 }|}]
 
+let scroll_y : unit -> float = [%mel.raw {|function () { return window.scrollY }|}]
+let scroll_to_top : unit -> unit = [%mel.raw {|function () { window.scrollTo({ top: 0, behavior: "smooth" }) }|}]
+
 let copy : string -> (bool -> unit) -> unit =
   [%mel.raw
     {|function (text, k) { if (!navigator.clipboard) { k(false); return } navigator.clipboard.writeText(text).then(function () { k(true) }, function () { k(false) }) }|}]
@@ -34,5 +37,7 @@ let () =
   Platform.every := every;
   Platform.after := after;
   Platform.overflows := overflows;
+  Platform.scroll_y := scroll_y;
+  Platform.scroll_to_top := scroll_to_top;
   Platform.copy := copy;
   Yuka.render ~islands:Yuka_islands.registry ()

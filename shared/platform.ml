@@ -30,3 +30,9 @@ let after : (int -> (unit -> unit) -> unit -> unit) ref = ref (fun _ _ () -> ())
 
 (** Whether the element with this id has more content than it shows. *)
 let overflows : (string -> bool) ref = ref (fun _ -> false)
+
+(** How far the window is scrolled down, in CSS pixels. *)
+let scroll_y : (unit -> float) ref = ref (fun () -> 0.)
+
+(** Scrolls the window to the top, smoothly. *)
+let scroll_to_top : (unit -> unit) ref = ref (fun () -> ())

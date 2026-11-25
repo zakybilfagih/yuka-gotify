@@ -16,6 +16,12 @@ let trash =
         [];
     ]
 
+(* Material's arrow_upward icon. *)
+let arrow_up =
+  Yuka.element "svg"
+    [ Yuka.attr "viewBox" "0 0 24 24"; Yuka.attr "width" "24"; Yuka.attr "height" "24"; Yuka.attr "aria-hidden" "true" ]
+    [ Yuka.element "path" [ Yuka.attr "fill" "currentColor"; Yuka.attr "d" "M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z" ] [] ]
+
 let undo_ms = 5000
 let body_id id = "message-body-" ^ Int.to_string id
 
@@ -85,6 +91,17 @@ let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string)
   Yuka.Effect.after (fun () -> Yuka.Browser.on_window "resize" (fun _ -> measure ()));
   let toggle id _ =
     Yuka.State.update expanded (fun ids -> if List.mem id ids then List.filter (( <> ) id) ids else id :: ids)
+  in
+  (* Scroll to top: shows once the window is scrolled down. Without
+     JavaScript it is always there, and #top scrolls the page up. *)
+  let scrolled = Yuka.State.make true in
+  Yuka.Effect.after (fun () ->
+      let update () = Yuka.State.set scrolled (!Platform.scroll_y () > 400.) in
+      update ();
+      Yuka.Browser.on_window "scroll" (fun _ -> update ()));
+  let to_top event =
+    Yuka.Event.prevent_default event;
+    !Platform.scroll_to_top ()
   in
   let failure = Yuka.State.make None in
   let report = function
@@ -197,6 +214,10 @@ let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string)
              </div>
            </li>))
     </ol>
+    <a class_="scroll-top" href="#top" aria_label="Scroll to top" title="Scroll to top"
+      hidden=(not (Yuka.State.get scrolled)) on_click=to_top>
+      arrow_up
+    </a>
     <a id="next-page" class_="button outlined load-more" href=next data_yuka_replace="" data_yuka_keep_scroll=""
       hidden=(not (page ()).more)>
       (Yuka.text (if Yuka.State.get Yuka.Browser.navigating then "Loading..." else "Load more"))

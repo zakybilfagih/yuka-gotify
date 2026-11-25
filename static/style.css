@@ -168,6 +168,11 @@ body {
   background: #323232; color: #fff; font-size: 14px;
 }
 .snackbar .button { color: #90caf9; margin-left: auto; }
+.scroll-top {
+  position: fixed; right: 24px; bottom: 24px; z-index: 20;
+  display: flex; align-items: center; justify-content: center; width: 48px; height: 48px;
+  border-radius: 50%; background: var(--primary); color: #fff; box-shadow: var(--shadow);
+}
 .button.load-more { display: flex; width: fit-content; margin: 0 auto 16px; color: inherit; text-decoration: none; }
 
 /* Buttons */
@@ -247,7 +252,8 @@ details.create > summary { display: inline-flex; }
 /* Tables */
 .table-card { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
-th { text-align: left; font-weight: 500; padding: 16px; border-bottom: 1px solid var(--divider); }
+td time { white-space: nowrap; }
+th { text-align: left; white-space: nowrap; font-weight: 500; padding: 16px; border-bottom: 1px solid var(--divider); }
 td { padding: 12px 16px; border-bottom: 1px solid var(--divider); }
 tr:last-child td { border-bottom: 0; }
 .name-cell { display: inline-flex; align-items: center; gap: 12px; }
