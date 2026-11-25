@@ -55,3 +55,6 @@ let elevate = Yuka.Form.action ~name:"elevate" ~fields:elevate_form ~output:Yuka
 
 (** The choices of the Elevate dialog, as Gotify's web UI. *)
 let durations = [ (3600, "1 hour"); (86400, "1 day"); (30 * 86400, "30 days"); (365 * 86400, "1 year"); (0, "End the elevation") ]
+
+(** The ids of all the user's applications, in their new order. *)
+let reorder_apps = Yuka.Action.mutation ~name:"reorder_apps" ~input:(Yuka.Codec.list Yuka.Codec.int) ~output:Yuka.Codec.unit

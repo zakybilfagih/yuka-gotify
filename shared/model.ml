@@ -21,3 +21,7 @@ type page = { messages : message list; more : bool } [@@deriving codec]
 
 (** An application in the drawer. *)
 type app_link = { id : int; name : string } [@@deriving codec]
+
+(** A row of the Applications table. *)
+type app_row = { id : int; name : string; description : string; priority : int; last_used : string; created : string }
+[@@deriving codec]

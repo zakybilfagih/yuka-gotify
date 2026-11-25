@@ -14,6 +14,9 @@ let overflows : string -> bool =
 let scroll_y : unit -> float = [%mel.raw {|function () { return window.scrollY }|}]
 let scroll_to_top : unit -> unit = [%mel.raw {|function () { window.scrollTo({ top: 0, behavior: "smooth" }) }|}]
 
+let start_drag : Yuka.Event.t -> unit =
+  [%mel.raw {|function (e) { if (e.dataTransfer) { e.dataTransfer.setData("text/plain", ""); e.dataTransfer.effectAllowed = "move" } }|}]
+
 let copy : string -> (bool -> unit) -> unit =
   [%mel.raw
     {|function (text, k) { if (!navigator.clipboard) { k(false); return } navigator.clipboard.writeText(text).then(function () { k(true) }, function () { k(false) }) }|}]
@@ -39,5 +42,6 @@ let () =
   Platform.overflows := overflows;
   Platform.scroll_y := scroll_y;
   Platform.scroll_to_top := scroll_to_top;
+  Platform.start_drag := start_drag;
   Platform.copy := copy;
   Yuka.render ~islands:Yuka_islands.registry ()

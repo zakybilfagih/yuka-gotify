@@ -292,3 +292,11 @@ tr:last-child td { border-bottom: 0; }
   .content { padding: 12px; }
   .page-header h1 { font-size: 26px; }
 }
+
+/* Reordering applications */
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+td.order { width: 1%; padding-right: 0; white-space: nowrap; }
+.drag-handle { cursor: grab; touch-action: none; }
+.move-forms { display: inline-flex; }
+.move-forms form { display: inline; }
+tr.dragging { opacity: .5; background: var(--hover); }

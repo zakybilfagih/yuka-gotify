@@ -121,29 +121,14 @@ let applications ~(session : Ui.session) ~reveal ~alert () =
           </form>
         </details>
         <div class_="card table-card">
-          <table>
-            <thead>
-              <tr><th>"Name"</th><th>"Description"</th><th>"Priority"</th><th>"Last used"</th><th>"Created"</th><th>"Token"</th><th /></tr>
-            </thead>
-            <tbody>
-              (Yuka.fragment
-                 (List.map
-                    (fun (a : M.application) ->
-                      <tr>
-                        <td><span class_="name-cell"><img src=(Static.url "defaultapp.png") alt="" width="32" height="32" />(Yuka.text a.name)</span></td>
-                        <td>(Yuka.text a.description)</td>
-                        <td>(Yuka.int a.default_priority)</td>
-                        <td><time>(Yuka.text (Ui.date_opt a.last_used))</time></td>
-                        <td><time>(Yuka.text (Ui.date a.created_at))</time></td>
-                        <td>(link_button (Routes.app_token ~id:a.id ()) "New token")</td>
-                        <td class_="actions">
-                          (link_button (Routes.app_edit ~id:a.id ()) "Edit")
-                          (link_button ~class_:"button text danger" (Routes.app_remove ~id:a.id ()) "Delete")
-                        </td>
-                      </tr>)
-                    session.apps))
-            </tbody>
-          </table>
+          <Yuka.Client>
+            <App_table image=(Static.url "defaultapp.png")
+              apps=(List.map
+                      (fun (a : M.application) ->
+                        { Model.id = a.id; name = a.name; description = a.description; priority = a.default_priority;
+                          last_used = Ui.date_opt a.last_used; created = Ui.date a.created_at })
+                      session.apps) />
+          </Yuka.Client>
           (if session.apps = [] then <p class_="empty">"No applications"</p> else Yuka.empty)
         </div>
       </section>)

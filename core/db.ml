@@ -193,6 +193,34 @@ let apps_of_user uid = use (fun (module C : Caqti_lwt.CONNECTION) -> C.collect_l
    any string that sorts after the last one keeps the order. *)
 let next_sort_key last = match last with None -> "a0" | Some k -> k ^ "V"
 
+(* The sort key of the [i]th application in a new order: a valid key of
+   fractional indexing ("a0" to "az", then "b00"), so Gotify's clients can
+   still put a key between two of them. *)
+let sort_key_at i =
+  let digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz" in
+  let d n = String.make 1 digits.[n] in
+  if i < 62 then "a" ^ d i else
+    let j = i - 62 in
+    if j < 62 * 62 then "b" ^ d (j / 62) ^ d (j mod 62) else "c" ^ d (j / 3844 mod 62) ^ d (j / 62 mod 62) ^ d (j mod 62)
+
+let q_set_sort_key = (T.(t3 string int int) ->. T.unit) "UPDATE applications SET sort_key = ? WHERE id = ? AND user_id = ?"
+
+(** Gives the applications [ids] of the user, all of them, this order, in one
+    transaction; the keys go through temporary ones first, as they are unique. *)
+let reorder_apps uid ids =
+  use (fun (module C : Caqti_lwt.CONNECTION) ->
+      let ( let* ) = Lwt_result.bind in
+      let set key id = C.exec q_set_sort_key (key, id, uid) in
+      let rec each f i = function [] -> Lwt_result.return () | id :: rest -> let* () = f i id in each f (i + 1) rest in
+      let* () = C.start () in
+      let run =
+        let* () = each (fun _ id -> set ("~" ^ string_of_int id) id) 0 ids in
+        each (fun i id -> set (sort_key_at i) id) 0 ids
+      in
+      Lwt.bind run (function
+        | Ok () -> C.commit ()
+        | Error _ as e -> Lwt.bind (C.rollback ()) (fun _ -> Lwt.return e)))
+
 let create_app ~user_id ~name ~description ~default_priority ?sort_key token =
   let created_at = now () in
   use (fun (module C : Caqti_lwt.CONNECTION) ->

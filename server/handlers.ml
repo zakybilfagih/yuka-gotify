@@ -118,6 +118,20 @@ let app_update req ~id =
              in
              Lwt.return (redirect "/applications")))
 
+(* The new order of the user's applications, when [ids] are all of them. *)
+let reorder (s : Ui.session) ids =
+  let own = List.sort compare (List.map (fun (a : M.application) -> a.id) s.apps) in
+  if List.sort compare ids = own then Lwt.map (fun () -> true) (Db.reorder_apps s.user.id ids) else Lwt.return false
+
+(* Up or Down of an application, the form of the Applications page without
+   JavaScript. *)
+let app_move req ~id =
+  Ui.posted req (fun s fields ->
+      let ids = List.map (fun (a : M.application) -> a.id) s.apps in
+      let rec up = function a :: b :: rest when b = id -> b :: a :: rest | x :: rest -> x :: up rest | [] -> [] in
+      let moved = match Ui.field fields "dir" with "up" -> up ids | _ -> List.rev (up (List.rev ids)) in
+      Ui.lwt (Lwt.map (fun _ -> redirect "/applications") (reorder s moved)))
+
 (* Clients *)
 
 let expires fields =
@@ -277,6 +291,12 @@ let elevate_client (s : Ui.session) id seconds =
 
 let register () =
   let module A = App_shared.Actions in
+  Yuka.Server.Action.implement A.reorder_apps (fun req ids ->
+      Yuka.Async.bind (Yuka_server.to_async (Ui.find req)) (function
+        | None -> Yuka.Server.Action.reject "You are not signed in"
+        | Some s ->
+            Yuka.Async.bind (Yuka_server.to_async (reorder s ids)) (fun ok ->
+                if ok then Yuka.Async.return () else Yuka.Server.Action.reject "The applications changed: reload the page")));
   Yuka.Server.Form.implement A.confirm ~redirect:Fun.id (fun req { target; elevate_pass } ->
       elevated req elevate_pass (fun s ->
           match target with

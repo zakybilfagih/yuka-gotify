@@ -36,3 +36,7 @@ let scroll_y : (unit -> float) ref = ref (fun () -> 0.)
 
 (** Scrolls the window to the top, smoothly. *)
 let scroll_to_top : (unit -> unit) ref = ref (fun () -> ())
+
+(** In a dragstart: sets the data of the drag, which Firefox needs to start
+    it, and makes it a move. *)
+let start_drag : (Yuka.Event.t -> unit) ref = ref (fun _ -> ())

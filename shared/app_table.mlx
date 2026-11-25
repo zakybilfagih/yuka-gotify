@@ -1,0 +1,130 @@
+(* The Applications table, in the order of their sort keys, which the drawer
+   follows too. A row moves by dragging its handle, or with the Up and Down
+   arrows on the focused handle; the island saves the whole order and loads
+   the page again, so the drawer shows it. Without JavaScript, each row has
+   Up and Down buttons that post a move. *)
+
+let icon d =
+  Yuka.element "svg"
+    [ Yuka.attr "viewBox" "0 0 24 24"; Yuka.attr "width" "20"; Yuka.attr "height" "20"; Yuka.attr "aria-hidden" "true" ]
+    [ Yuka.element "path" [ Yuka.attr "fill" "currentColor"; Yuka.attr "d" d ] [] ]
+
+let handle_icon =
+  icon
+    "M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"
+
+let up_icon = icon "M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"
+let down_icon = icon "M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"
+let handle_id id = "move-" ^ Int.to_string id
+
+(* [ids] with [id] at [index]. *)
+let place ids id index =
+  let rest = List.filter (( <> ) id) ids in
+  let index = Int.max 0 (Int.min index (List.length rest)) in
+  List.filteri (fun i _ -> i < index) rest @ [ id ] @ List.filteri (fun i _ -> i >= index) rest
+
+let index_of id ids =
+  let rec go i = function [] -> 0 | x :: rest -> if x = id then i else go (i + 1) rest in
+  go 0 ids
+
+let[@client] make ~(apps : Model.app_row list) ~(image : string) () =
+  let saved = List.map (fun (a : Model.app_row) -> a.id) apps in
+  let order = Yuka.State.make saved in
+  let started = Yuka.State.make false in
+  (* The row whose handle is pressed, which may be dragged; the row dragged. *)
+  let armed = Yuka.State.make None in
+  let dragging = Yuka.State.make None in
+  let failure = Yuka.State.make None in
+  Yuka.Effect.after (fun () ->
+      Yuka.State.set started true;
+      Yuka.Browser.on_window "pointerup" (fun _ -> if Yuka.State.peek dragging = None then Yuka.State.set armed None));
+  let rows () =
+    List.filter_map (fun id -> List.find_opt (fun (a : Model.app_row) -> a.id = id) apps) (Yuka.State.get order)
+  in
+  let save () =
+    let ids = Yuka.State.peek order in
+    if ids <> saved then
+      Yuka.Async.on_result (Yuka.Action.call Actions.reorder_apps ids) (function
+        | Ok (Ok ()) -> Yuka.Browser.refresh ()
+        | Ok (Error e) ->
+            Yuka.State.set order saved;
+            Yuka.State.set failure (Some (Yuka.Status.error_to_string e))
+        | Error m ->
+            Yuka.State.set order saved;
+            Yuka.State.set failure (Some m))
+  in
+  let key id event =
+    let by = match Yuka.Event.key event with "ArrowUp" -> Some (-1) | "ArrowDown" -> Some 1 | _ -> None in
+    match by with
+    | None -> ()
+    | Some by ->
+        Yuka.Event.prevent_default event;
+        Yuka.State.update order (fun ids -> place ids id (index_of id ids + by));
+        Yuka.Browser.focus (handle_id id);
+        save ()
+  in
+  let over id event =
+    match Yuka.State.peek dragging with
+    | Some d ->
+        Yuka.Event.prevent_default event;
+        if d <> id then Yuka.State.update order (fun ids -> place ids d (index_of id ids))
+    | None -> ()
+  in
+  let ended _ =
+    Yuka.State.set dragging None;
+    Yuka.State.set armed None;
+    save ()
+  in
+  <div>
+    <p class_="alert" role=`alert hidden=(Yuka.State.get failure = None)>
+      (Yuka.text (Option.value (Yuka.State.get failure) ~default:""))
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th><span class_="visually-hidden">"Order"</span></th>
+          <th>"Name"</th><th>"Description"</th><th>"Priority"</th><th>"Last used"</th><th>"Created"</th><th>"Token"</th><th />
+        </tr>
+      </thead>
+      <tbody>
+        (Yuka.each ~equal:( = )
+           ~key:(fun (a : Model.app_row) -> Int.to_string a.id)
+           (fun () -> Array.of_list (rows ()))
+           (fun (a : Model.app_row) ->
+             <tr draggable=(Yuka.State.get armed = Some a.id)
+               class_=(if Yuka.State.get dragging = Some a.id then "dragging" else "")
+               on_dragstart=(fun event ->
+                 !Platform.start_drag event;
+                 Yuka.State.set dragging (Some a.id))
+               on_dragover=(over a.id) on_drop=(fun event -> Yuka.Event.prevent_default event) on_dragend=ended>
+               <td class_="order">
+                 <button type_=`button id=(handle_id a.id) class_="icon-button drag-handle" hidden=(not (Yuka.State.get started))
+                   aria_label=("Move " ^ a.name ^ ", with the arrow keys") title="Drag to reorder"
+                   on_pointerdown=(fun _ -> Yuka.State.set armed (Some a.id)) on_keydown=(key a.id)>
+                   handle_icon
+                 </button>
+                 <span class_="move-forms" hidden=(Yuka.State.get started)>
+                   <form method_=`post action=(Routes.app_move ~id:a.id ())>
+                     <input type_=`hidden name="dir" value="up" />
+                     <button type_=`submit class_="icon-button" aria_label=("Move " ^ a.name ^ " up") title="Up">up_icon</button>
+                   </form>
+                   <form method_=`post action=(Routes.app_move ~id:a.id ())>
+                     <input type_=`hidden name="dir" value="down" />
+                     <button type_=`submit class_="icon-button" aria_label=("Move " ^ a.name ^ " down") title="Down">down_icon</button>
+                   </form>
+                 </span>
+               </td>
+               <td><span class_="name-cell"><img src=image alt="" width="32" height="32" />(Yuka.text a.name)</span></td>
+               <td>(Yuka.text a.description)</td>
+               <td>(Yuka.int a.priority)</td>
+               <td><time>(Yuka.text a.last_used)</time></td>
+               <td><time>(Yuka.text a.created)</time></td>
+               <td><a class_="button text" href=(Routes.app_token ~id:a.id ())>"New token"</a></td>
+               <td class_="actions">
+                 <a class_="button text" href=(Routes.app_edit ~id:a.id ())>"Edit"</a>
+                 <a class_="button text danger" href=(Routes.app_remove ~id:a.id ())>"Delete"</a>
+               </td>
+             </tr>))
+      </tbody>
+    </table>
+  </div>
