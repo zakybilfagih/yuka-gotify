@@ -1,0 +1,322 @@
+open App_shared
+module M = Gotify_core.Model
+
+let version = Gotify_core.Api.version
+let theme_class theme = "app theme-" ^ theme
+
+let alert_view = function
+  | None -> Yuka.empty
+  | Some message -> <p class_="alert" role=`alert>(Yuka.text message)</p>
+
+let post_button ~action ~label ?(class_ = "button text") () =
+  <form method_=`post action class_="inline-form"><button type_=`submit class_>(Yuka.text label)</button></form>
+
+(* A delete that asks first, with no JavaScript: the confirm button shows
+   when the summary is opened. *)
+let confirm_delete ~action ~what () =
+  <details class_="confirm">
+    <summary class_="button text danger">"Delete"</summary>
+    <div class_="confirm-panel card">
+      <p>(Yuka.text ("Delete " ^ what ^ "?"))</p>
+      (post_button ~action ~label:"Confirm delete" ~class_:"button contained danger" ())
+    </div>
+  </details>
+
+let shell ~(session : Ui.session) ~children () =
+  let link href label = <a class_="appbar-link" href>(Yuka.text label)</a> in
+  let next_theme = if session.theme = "dark" then "light" else "dark" in
+  <div class_=(theme_class session.theme)>
+    <header class_="appbar">
+      <a class_="brand" href=(Routes.messages ())>"Gotify"</a>
+      <span class_="brand-version">(Yuka.text ("@" ^ version))</span>
+      <nav class_="appbar-actions" aria_label="Main">
+        <form method_=`post action=(Routes.theme ()) class_="inline-form">
+          <input type_=`hidden name="theme" value=next_theme />
+          <input type_=`hidden name="next" value="/" />
+          <button type_=`submit class_="appbar-link" title="Toggle theme">
+            (Yuka.text (if next_theme = "dark" then "Dark" else "Light"))
+          </button>
+        </form>
+        (link (Routes.applications ()) "Apps")
+        (link (Routes.clients ()) "Clients")
+        (if session.user.admin then link (Routes.users ()) "Users" else Yuka.empty)
+        (link (Routes.settings ()) "Settings")
+        <form method_=`post action=(Routes.logout ()) class_="inline-form">
+          <button type_=`submit class_="appbar-link">"Logout"</button>
+        </form>
+      </nav>
+    </header>
+    <div class_="layout">
+      <aside class_="drawer" aria_label="Applications">
+        <a class_="drawer-item" href=(Routes.messages ())>"All Messages"</a>
+        <hr />
+        (Yuka.fragment
+           (List.map
+              (fun (a : M.application) ->
+                <a class_="drawer-item" href=(Routes.app_messages ~app:a.id ())>
+                  <img src="/static/defaultapp.png" alt="" width="24" height="24" />
+                  (Yuka.text a.name)
+                </a>)
+              session.apps))
+        (if session.apps = [] then
+           <p class_="drawer-empty">"No applications. " <a href=(Routes.applications ())>"Create one"</a></p>
+         else Yuka.empty)
+      </aside>
+      <main class_="content">children</main>
+    </div>
+  </div>
+
+let messages ~(session : Ui.session) ~alert () =
+  Yuka.Server.page ~title:"Gotify" (fun () ->
+      let feed = { Model.user = session.user.id; app = None } in
+      Yuka.fragment [ alert_view alert; <Yuka.Client><Message_list feed title="All Messages" /></Yuka.Client> ])
+
+let app_messages ~(session : Ui.session) ~app ~alert () =
+  let title =
+    match List.find_opt (fun (a : M.application) -> a.id = app) session.apps with
+    | Some a -> a.name
+    | None -> "Unknown application"
+  in
+  Yuka.Server.page ~title:(title ^ " - Gotify") (fun () ->
+      let feed = { Model.user = session.user.id; app = Some app } in
+      Yuka.fragment [ alert_view alert; <Yuka.Client><Message_list feed title /></Yuka.Client> ])
+
+let token_reveal ~kind = function
+  | None -> Yuka.empty
+  | Some (name, token) ->
+      <section class_="card reveal" role=`status>
+        <h2>(Yuka.text (kind ^ " token for " ^ name))</h2>
+        <p>"Copy it now: Gotify shows a token only once."</p>
+        <input class_="token" readonly=true value=token aria_label="Token" />
+      </section>
+
+let priority_input value =
+  <label class_="field">"Default priority"
+    <input type_=`number name="defaultPriority" min="0" max="10" value=(Int.to_string value) />
+  </label>
+
+let applications ~(session : Ui.session) ~reveal ~alert () =
+  Yuka.Server.page ~title:"Applications - Gotify" (fun () ->
+      <section>
+        <header class_="page-header">
+          <h1>"Applications"</h1>
+        </header>
+        (alert_view alert)
+        (token_reveal ~kind:"Application" (Ui.revealed session reveal))
+        <details class_="create">
+          <summary class_="button contained">"Create application"</summary>
+          <form method_=`post action=(Routes.app_create ()) class_="stack">
+            <label class_="field">"Name" <input name="name" required=true autocomplete="off" /></label>
+            <label class_="field">"Short description" <input name="description" autocomplete="off" /></label>
+            (priority_input 0)
+            <button type_=`submit class_="button contained">"Create"</button>
+          </form>
+        </details>
+        <div class_="card table-card">
+          <table>
+            <thead>
+              <tr><th>"Name"</th><th>"Description"</th><th>"Priority"</th><th>"Last used"</th><th>"Token"</th><th /></tr>
+            </thead>
+            <tbody>
+              (Yuka.fragment
+                 (List.map
+                    (fun (a : M.application) ->
+                      <tr>
+                        <td><span class_="name-cell"><img src="/static/defaultapp.png" alt="" width="32" height="32" />(Yuka.text a.name)</span></td>
+                        <td>(Yuka.text a.description)</td>
+                        <td>(Yuka.int a.default_priority)</td>
+                        <td>(Yuka.text (Ui.date_opt a.last_used))</td>
+                        <td>(post_button ~action:(Routes.app_rotate ~id:a.id ()) ~label:"New token" ())</td>
+                        <td class_="actions">
+                          <details class_="edit">
+                            <summary class_="button text">"Edit"</summary>
+                            <form method_=`post action=(Routes.app_update ~id:a.id ()) class_="stack card edit-panel">
+                              <label class_="field">"Name" <input name="name" value=a.name required=true /></label>
+                              <label class_="field">"Short description" <input name="description" value=a.description /></label>
+                              (priority_input a.default_priority)
+                              <button type_=`submit class_="button contained">"Save"</button>
+                            </form>
+                          </details>
+                          (confirm_delete ~action:(Routes.app_delete ~id:a.id ()) ~what:("the application " ^ a.name) ())
+                        </td>
+                      </tr>)
+                    session.apps))
+            </tbody>
+          </table>
+          (if session.apps = [] then <p class_="empty">"No applications"</p> else Yuka.empty)
+        </div>
+      </section>)
+
+let clients ~(session : Ui.session) ~(clients : M.client list) ~reveal ~alert () =
+  Yuka.Server.page ~title:"Clients - Gotify" (fun () ->
+      let now = Unix.gettimeofday () in
+      <section>
+        <header class_="page-header"><h1>"Clients"</h1></header>
+        (alert_view alert)
+        (token_reveal ~kind:"Client" (Ui.revealed session reveal))
+        <details class_="create">
+          <summary class_="button contained">"Create client"</summary>
+          <form method_=`post action=(Routes.client_create ()) class_="stack">
+            <label class_="field">"Name" <input name="name" required=true autocomplete="off" /></label>
+            <label class_="field">"Expire after inactivity (seconds, 0 = never)"
+              <input type_=`number name="expiresAfterInactivitySeconds" min="0" value="0" />
+            </label>
+            <button type_=`submit class_="button contained">"Create"</button>
+          </form>
+        </details>
+        <div class_="card table-card">
+          <table>
+            <thead><tr><th>"Name"</th><th>"Last used"</th><th>"Expires"</th><th>"Elevated"</th><th /></tr></thead>
+            <tbody>
+              (Yuka.fragment
+                 (List.map
+                    (fun (c : M.client) ->
+                      <tr>
+                        <td>
+                          (Yuka.text c.name)
+                          (if c.id = session.client.id then <span class_="chip">"this browser"</span> else Yuka.empty)
+                        </td>
+                        <td>(Yuka.text (Ui.date_opt c.last_used))</td>
+                        <td>(Yuka.text (match M.expires_at c with Some t -> Ui.date t | None -> "never"))</td>
+                        <td>(Yuka.text (if M.elevated ~now c then "until " ^ Ui.date_opt c.elevated_until else "no"))</td>
+                        <td class_="actions">
+                          <details class_="edit">
+                            <summary class_="button text">"Edit"</summary>
+                            <form method_=`post action=(Routes.client_update ~id:c.id ()) class_="stack card edit-panel">
+                              <label class_="field">"Name" <input name="name" value=c.name required=true /></label>
+                              <label class_="field">"Expire after inactivity (seconds)"
+                                <input type_=`number name="expiresAfterInactivitySeconds" min="0"
+                                  value=(Int.to_string c.expires_after) />
+                              </label>
+                              <button type_=`submit class_="button contained">"Save"</button>
+                            </form>
+                          </details>
+                          (confirm_delete ~action:(Routes.client_delete ~id:c.id ()) ~what:("the client " ^ c.name) ())
+                        </td>
+                      </tr>)
+                    clients))
+            </tbody>
+          </table>
+        </div>
+      </section>)
+
+let users ~(session : Ui.session) ~(users : M.user list) ~alert () =
+  Yuka.Server.page ~title:"Users - Gotify" (fun () ->
+      if not session.user.admin then <section><h1>"Users"</h1><p class_="alert">"Admins only."</p></section>
+      else
+        <section>
+          <header class_="page-header"><h1>"Users"</h1></header>
+          (alert_view alert)
+          <details class_="create">
+            <summary class_="button contained">"Create user"</summary>
+            <form method_=`post action=(Routes.user_create ()) class_="stack">
+              <label class_="field">"Name" <input name="name" required=true autocomplete="off" /></label>
+              <label class_="field">"Password" <input type_=`password name="pass" required=true autocomplete="new-password" /></label>
+              <label class_="check"><input type_=`checkbox name="admin" />"Has administrator rights"</label>
+              <button type_=`submit class_="button contained">"Create"</button>
+            </form>
+          </details>
+          <div class_="card table-card">
+            <table>
+              <thead><tr><th>"Name"</th><th>"Admin"</th><th>"Created"</th><th /></tr></thead>
+              <tbody>
+                (Yuka.fragment
+                   (List.map
+                      (fun (u : M.user) ->
+                        <tr>
+                          <td>(Yuka.text u.name)</td>
+                          <td>(Yuka.text (if u.admin then "Yes" else "No"))</td>
+                          <td>(Yuka.text (Ui.date u.created_at))</td>
+                          <td class_="actions">
+                            <details class_="edit">
+                              <summary class_="button text">"Edit"</summary>
+                              <form method_=`post action=(Routes.user_update ~id:u.id ()) class_="stack card edit-panel">
+                                <label class_="field">"Name" <input name="name" value=u.name required=true /></label>
+                                <label class_="field">"New password (empty: keep)"
+                                  <input type_=`password name="pass" autocomplete="new-password" />
+                                </label>
+                                <label class_="check"><input type_=`checkbox name="admin" checked=u.admin />"Has administrator rights"</label>
+                                <button type_=`submit class_="button contained">"Save"</button>
+                              </form>
+                            </details>
+                            (confirm_delete ~action:(Routes.user_delete ~id:u.id ()) ~what:("the user " ^ u.name) ())
+                          </td>
+                        </tr>)
+                      users))
+              </tbody>
+            </table>
+          </div>
+        </section>)
+
+let settings ~(session : Ui.session) ~alert () =
+  Yuka.Server.page ~title:"Settings - Gotify" (fun () ->
+      let option value label =
+        <option value selected=(session.theme = value)>(Yuka.text label)</option>
+      in
+      <section class_="narrow">
+        <header class_="page-header"><h1>"Settings"</h1></header>
+        (alert_view alert)
+        <div class_="card stack">
+          <h2>"Theme"</h2>
+          <form method_=`post action=(Routes.theme ()) class_="row">
+            <input type_=`hidden name="next" value="/settings" />
+            <select name="theme" aria_label="Theme">
+              (option "system" "System") (option "light" "Light") (option "dark" "Dark")
+            </select>
+            <button type_=`submit class_="button contained">"Apply"</button>
+          </form>
+        </div>
+        <div class_="card stack">
+          <h2>"Change password"</h2>
+          <form method_=`post action=(Routes.password ()) class_="stack">
+            <label class_="field">"New password"
+              <input type_=`password name="pass" required=true autocomplete="new-password" />
+            </label>
+            <button type_=`submit class_="button contained">"Change password"</button>
+          </form>
+        </div>
+        <p class_="muted">(Yuka.text ("Signed in as " ^ session.user.name))</p>
+      </section>)
+
+let elevate ~(session : Ui.session) ~next ~alert () =
+  Yuka.Server.page ~title:"Confirm password - Gotify" (fun () ->
+      <section class_="narrow">
+        <div class_="card stack">
+          <h1>"Confirm your password"</h1>
+          <p>"This action needs a recent sign-in. Your session stays elevated for one hour."</p>
+          (alert_view alert)
+          <form method_=`post action=(Routes.elevate_post ()) class_="stack">
+            <input type_=`hidden name="next" value=(Ui.safe_next next) />
+            <label class_="field">(Yuka.text ("Password of " ^ session.user.name))
+              <input type_=`password name="pass" required=true autofocus=true autocomplete="current-password" />
+            </label>
+            <button type_=`submit class_="button contained">"Confirm"</button>
+          </form>
+        </div>
+      </section>)
+
+let login ~failed () =
+  Yuka.Server.page ~title:"Login - Gotify" (fun () ->
+      <div class_=(theme_class "system")>
+        <header class_="appbar"><span class_="brand">"Gotify"</span></header>
+        <main class_="login">
+          <form method_=`post action=(Routes.login_post ()) class_="card stack login-card">
+            <h1>"Login"</h1>
+            (if failed = Some true then <p class_="alert" role=`alert>"Wrong username or password"</p> else Yuka.empty)
+            <label class_="field">"Username" <input name="name" required=true autofocus=true autocomplete="username" /></label>
+            <label class_="field">"Password"
+              <input type_=`password name="pass" required=true autocomplete="current-password" />
+            </label>
+            <button type_=`submit class_="button contained">"Login"</button>
+          </form>
+        </main>
+      </div>)
+
+let not_found ~path () =
+  Yuka.Server.page ~title:"Not found - Gotify" (fun () ->
+      <main class_="login"><div class_="card"><h1>"Not found"</h1><p>(Yuka.text ("No page at " ^ path))</p>
+      <a href="/">"Back to messages"</a></div></main>)
+
+let error_page () =
+  Yuka.Server.page ~title:"Error - Gotify" (fun () ->
+      <main class_="login"><div class_="card"><h1>"Something went wrong"</h1><a href="/">"Back to messages"</a></div></main>)

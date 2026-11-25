@@ -1,0 +1,74 @@
+(* The live list of messages of a feed, with delete and delete all. *)
+
+(* Material's delete icon. Plain ASCII: a non-ASCII OCaml literal is UTF-8
+   bytes, which Melange would show byte by byte in the browser. *)
+let trash =
+  Yuka.element "svg"
+    [ Yuka.attr "viewBox" "0 0 24 24"; Yuka.attr "width" "24"; Yuka.attr "height" "24"; Yuka.attr "aria-hidden" "true" ]
+    [
+      Yuka.element "path"
+        [ Yuka.attr "fill" "currentColor"; Yuka.attr "d" "M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" ]
+        [];
+    ]
+
+let[@client] make ~(feed : Model.feed) ~(title : string) () =
+  let live = Yuka.Live.make Topics.messages (fun () -> feed) in
+  let messages () =
+    match Yuka.Status.data (Yuka.State.get (Yuka.Live.state live)) with Some ms -> ms | None -> []
+  in
+  let failure = Yuka.State.make None in
+  let report = function
+    | Ok (Ok ()) -> Yuka.State.set failure None
+    | Ok (Error e) -> Yuka.State.set failure (Some (Yuka.Status.error_to_string e))
+    | Error m -> Yuka.State.set failure (Some m)
+  in
+  let delete (id : int) _ =
+    Yuka.Async.on_result
+      (Yuka.Live.optimistic live
+         ~change:(List.filter (fun (m : Model.message) -> m.id <> id))
+         (fun () -> Yuka.Action.call Actions.delete_message id))
+      report
+  in
+  let delete_all _ =
+    if Yuka.Browser.confirm "Delete all messages?" then
+      Yuka.Async.on_result
+        (Yuka.Live.optimistic live ~change:(fun _ -> []) (fun () -> Yuka.Action.call Actions.delete_all feed.app))
+        report
+  in
+  <section class_="messages">
+    <header class_="page-header">
+      <h1>(Yuka.text title)</h1>
+      <button type_=`button class_="button outlined" disabled=(messages () = []) on_click=delete_all>
+        "Delete all"
+      </button>
+    </header>
+    <p class_="error" role=`alert hidden=(Yuka.State.get failure = None)>
+      (Yuka.text (Option.value (Yuka.State.get failure) ~default:""))
+    </p>
+    <p class_="empty" hidden=(messages () <> [])>"No messages"</p>
+    <ol class_="message-list">
+      (Yuka.each ~equal:( = )
+         ~key:(fun (m : Model.message) -> Int.to_string m.id)
+         (fun () -> Array.of_list (messages ()))
+         (fun (m : Model.message) ->
+           <li class_="card message" data_priority=(Int.to_string m.priority)>
+             <img class_="app-image" src="/static/defaultapp.png" alt="" width="70" height="70" />
+             <div class_="message-main">
+               <div class_="message-head">
+                 <div class_="message-heading">
+                   <h2 class_="message-title">(Yuka.text m.title)</h2>
+                   <span class_="message-app">(Yuka.text m.app_name)</span>
+                 </div>
+                 <time class_="message-date">(Yuka.text m.date)</time>
+                 <button type_=`button class_="icon-button" aria_label="Delete message" title="Delete"
+                   on_click=(delete m.id)>
+                   trash
+                 </button>
+               </div>
+               <div class_=(if m.markdown then "message-body markdown" else "message-body plain")>
+                 (Yuka.fragment (List.map Markup.view m.body))
+               </div>
+             </div>
+           </li>))
+    </ol>
+  </section>

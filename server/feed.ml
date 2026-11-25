@@ -1,0 +1,75 @@
+(* The live message feeds of the web UI. Every change of a user's messages
+   (REST API or UI) goes through Stream.changed, which reloads the feeds of
+   that user here. *)
+
+open Gotify_core
+module S = App_shared
+
+let ( let* ) = Lwt.bind
+
+let view (apps : Model.application list) (m : Model.message) : S.Model.message =
+  let markdown = Markdown.is_markdown m.extras in
+  {
+    id = m.id;
+    app_id = m.app_id;
+    app_name =
+      (match List.find_opt (fun (a : Model.application) -> a.id = m.app_id) apps with Some a -> a.name | None -> "");
+    title = m.title;
+    body = Markdown.body ~markdown m.message;
+    markdown;
+    priority = m.priority;
+    date = Ui.date m.date;
+  }
+
+let load (f : S.Model.feed) =
+  let* apps = Db.apps_of_user f.user in
+  let* ms =
+    match f.app with
+    | None -> Db.messages_of_user ~limit:S.Topics.limit ~since:0 f.user
+    | Some app when List.exists (fun (a : Model.application) -> a.id = app) apps ->
+        Db.messages_of_app ~limit:S.Topics.limit ~since:0 app
+    | Some _ -> Lwt.return []
+  in
+  Lwt.return (List.map (view apps) ms)
+
+let changed uid =
+  Lwt.async (fun () ->
+      let* apps = Lwt.catch (fun () -> Db.apps_of_user uid) (fun _ -> Lwt.return []) in
+      Yuka.Server.Live.changed S.Topics.messages { S.Model.user = uid; app = None };
+      List.iter
+        (fun (a : Model.application) -> Yuka.Server.Live.changed S.Topics.messages { S.Model.user = uid; app = Some a.id })
+        apps;
+      Lwt.return_unit)
+
+let session req =
+  Yuka.Async.bind (Yuka_server.to_async (Ui.find req)) (function
+    | Some s -> Yuka.Async.return s
+    | None -> Yuka.Server.Action.reject "You are not signed in")
+
+let register () =
+  Stream.on_change changed;
+  Yuka.Server.Live.implement S.Topics.messages
+    ~allow:(fun req (f : S.Model.feed) -> Ui.user_of_request req = Some f.user)
+    (fun f -> Yuka_server.to_async (load f));
+  Yuka.Server.Action.implement S.Actions.delete_message (fun req id ->
+      Yuka.Async.bind (session req) (fun (s : Ui.session) ->
+          Yuka_server.to_async
+            (let* m = Db.message_by_id id in
+             let* app = match m with Some m -> Db.app_by_id m.app_id | None -> Lwt.return None in
+             match app with
+             | Some a when a.user_id = s.user.id ->
+                 let* () = Db.delete_message id in
+                 Stream.changed s.user.id;
+                 Lwt.return_unit
+             | _ -> Lwt.return_unit)));
+  Yuka.Server.Action.implement S.Actions.delete_all (fun req app ->
+      Yuka.Async.bind (session req) (fun (s : Ui.session) ->
+          Yuka_server.to_async
+            (let* () =
+               match app with
+               | None -> Db.delete_user_messages s.user.id
+               | Some id when List.exists (fun (a : Model.application) -> a.id = id) s.apps -> Db.delete_app_messages id
+               | Some _ -> Lwt.return_unit
+             in
+             Stream.changed s.user.id;
+             Lwt.return_unit)))
