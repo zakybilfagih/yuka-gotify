@@ -24,34 +24,27 @@ with bcrypt, not Argon2.
 
 - [opam](https://opam.ocaml.org) 2.x
 - Node.js and npm (for esbuild, which bundles the client)
-- A checkout of Yuka next to this repository
 
 ## Setup
 
-Yuka is not on opam yet, so it is pinned from a checkout. Its `main` needs two
-small local edits to build as an opam package: a `(name yuka)` in
-`dune-project`, and `Async`, `Browser` and `State` as public modules.
-
 ```bash
 git clone https://github.com/zakybilfagih/yuka-gotify
-git clone https://github.com/davesnx/yuka
-cd yuka
-sed -i 's/^(lang dune 3.25)$/&\n\n(name yuka)/' dune-project
-sed -i '/^  \(async\|browser\|state\)$/d' src/dune
-cd ../yuka-gotify
-
-# A local switch in this directory, with Yuka's pinned dependencies
-opam switch create . ocaml-base-compiler.5.5.2 --no-install
-eval "$(opam env)"
-make -C ../yuka -s pin-list | while read -r name target; do
-  opam pin add "$name" "$target" --yes --no-action
-done
-opam pin add yuka "$PWD/../yuka" --kind=rsync --yes --no-action
-opam pin add yuka-server "$PWD/../yuka" --kind=rsync --yes --no-action
-opam install -y yuka yuka-server caqti caqti-lwt caqti-driver-sqlite3 cmarkit safepass alcotest yojson
-
-npm install
+cd yuka-gotify
+make init
 ```
+
+`make init` creates a local opam switch in `_opam` with OCaml 5.5.2, pins
+Yuka's patched dune and Melange and the ache HTTP library, pins `yuka` and
+`yuka-server` to Yuka's `main` on GitHub, installs the opam packages, and runs
+`npm install`. The first run builds the compiler and every dependency, so it
+takes a while.
+
+Yuka is not on opam yet, and its `main` needs two changes to build as a pinned
+package: [scripts/patch-yuka-opam.sh](scripts/patch-yuka-opam.sh) edits the
+opam files during the pin to drop `dune subst`, which needs a project name
+that Yuka's `dune-project` lacks, and to make `Yuka.Async`, `Yuka.Browser` and
+`Yuka.State` public. To build against a local Yuka checkout instead, run
+`make init YUKA=/path/to/yuka`.
 
 ## Build and run
 
@@ -69,6 +62,7 @@ server. Other targets (`make help` lists them):
 
 | Target | What it does |
 |---|---|
+| `make init` | Create the switch and install the dependencies |
 | `make build` | Build the server and the client |
 | `make test` | Run the API test suite |
 | `make serve-modules` | Serve the unbundled module tree |

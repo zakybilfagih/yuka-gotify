@@ -1,4 +1,6 @@
 PORT ?= 8080
+YUKA ?= git+https://github.com/davesnx/yuka.git\#main
+OCAML_VERSION ?= 5.5.2
 
 OPAM = opam exec --switch=$(CURDIR) --
 DUNE = $(OPAM) dune
@@ -7,6 +9,19 @@ SERVER = ./_build/default/server/main.exe --port $(PORT)
 .PHONY: help
 help: ## Print this help message
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
+
+.PHONY: init
+init: ## Create the local switch, pin yuka and yuka-server to $(YUKA), install the opam and npm packages
+	opam switch create . ocaml-base-compiler.$(OCAML_VERSION) --no-install -y
+	opam pin add --switch=$(CURDIR) -y --no-action dune.3.25.0 "git+https://github.com/davesnx/dune.git#1e6f26d4d6615e0d2770977a00d2f654fcc4dba3"
+	opam pin add --switch=$(CURDIR) -y --no-action melange.7.0.1-55 "git+https://github.com/davesnx/melange.git#16162e70268bf63cab1e12fd14f49f8d06983cf6"
+	opam pin add --switch=$(CURDIR) -y --no-action ache "git+https://github.com/davesnx/ache.git#main"
+	opam pin add --switch=$(CURDIR) -y --no-action ache-lwt "git+https://github.com/davesnx/ache.git#main"
+	OPAMEDITOR="sh $(CURDIR)/scripts/patch-yuka-opam.sh --public" opam pin add --switch=$(CURDIR) -y --no-action --edit yuka.dev "$(YUKA)"
+	OPAMEDITOR="sh $(CURDIR)/scripts/patch-yuka-opam.sh" opam pin add --switch=$(CURDIR) -y --no-action --edit yuka-server.dev "$(YUKA)"
+	opam install --switch=$(CURDIR) -y yuka yuka-server caqti caqti-lwt caqti-driver-sqlite3 cmarkit safepass alcotest yojson \
+	  ocaml-lsp-server ocamlmerlin-mlx
+	npm install
 
 .PHONY: build
 build: ## Build the server and the client
