@@ -60,6 +60,7 @@ let register () =
   Yuka.Server.Live.implement S.Topics.messages
     ~allow:(fun req (f : S.Model.feed) -> Ui.user_of_request req = Some f.user)
     (fun f -> Yuka_server.to_async (load f));
+  Yuka.Server.Action.implement S.Actions.ping (fun _ () -> Yuka.Async.return ());
   Yuka.Server.Action.implement S.Actions.delete_message (fun req id ->
       Yuka.Async.bind (session req) (fun (s : Ui.session) ->
           Yuka_server.to_async

@@ -22,6 +22,26 @@ let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string)
     Option.value (Yuka.Status.data (Yuka.State.get (Yuka.Live.state live))) ~default:initial
   in
   let messages () = (page ()).messages in
+  (* The socket closed: Yuka reconnects by itself, with delays of up to 5 s,
+     and gives up on a refused key. Retry loads the page again from the
+     server, which also gives a new subscription, once the server answers:
+     a client navigation that fails becomes a full page load, which would
+     show the browser's error page. *)
+  let disconnected () =
+    match Yuka.State.get (Yuka.Live.state live) with
+    | Yuka.Status.Ready { stale; _ } -> stale
+    | Failed _ -> true
+    | Idle | Loading _ -> false
+  in
+  let unreachable = Yuka.State.make false in
+  Yuka.Effect.after (fun () -> if not (disconnected ()) then Yuka.State.set unreachable false);
+  let retry _ =
+    Yuka.Async.on_result (Yuka.Action.call Actions.ping ()) (function
+      | Ok (Ok ()) ->
+          Yuka.State.set unreachable false;
+          Yuka.Browser.refresh ()
+      | Ok (Error _) | Error _ -> Yuka.State.set unreachable true)
+  in
   let next =
     let pages = feed.pages + 1 in
     match feed.app with None -> Routes.messages ~pages () | Some app -> Routes.app_messages ~app ~pages ()
@@ -57,6 +77,14 @@ let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string)
         "Delete all"
       </button>
     </header>
+    <div class_="card banner" role=`status hidden=(not (disconnected ()))>
+      <span>
+        (Yuka.text
+           (if Yuka.State.get unreachable then "The server is still unreachable. Trying again..."
+            else "Lost the connection to the server. New messages show again once it is back."))
+      </span>
+      <button type_=`button class_="button text" on_click=retry>"Retry"</button>
+    </div>
     <p class_="error" role=`alert hidden=(Yuka.State.get failure = None)>
       (Yuka.text (Option.value (Yuka.State.get failure) ~default:""))
     </p>

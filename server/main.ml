@@ -68,6 +68,7 @@ let () =
   Lwt_main.run
     (Lwt.bind (Gotify_core.Db.connect !db) (fun () ->
          Lwt.bind (Gotify_core.Api.create_default_user ~name ~pass) (fun () ->
+             Lwt.bind (Ui.load_known ()) @@ fun () ->
              Lwt.async Gotify_core.Api.sweep;
              Yuka_server.serve ~interface:!interface ~port:!port
                ~listening:(fun p -> Printf.eprintf "gotify-yuka on http://%s:%d\n%!" !interface p)

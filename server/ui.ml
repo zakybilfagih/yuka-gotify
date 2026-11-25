@@ -31,6 +31,17 @@ let forget_token token =
 
 let () = Stream.on_client_deleted forget_token
 
+(* Fills [known] with every client at startup, so that the live sockets of
+   pages opened before a restart are allowed again when they reconnect. *)
+let load_known () =
+  let* users = Db.users () in
+  Lwt_list.iter_s
+    (fun (u : M.user) ->
+      let* clients = Db.clients_of_user u.id in
+      List.iter (fun (c : M.client) -> Hashtbl.replace known c.id (u.id, c.token)) clients;
+      Lwt.return_unit)
+    users
+
 let user_of_request req =
   match client_id req with Some id -> Option.map fst (Hashtbl.find_opt known id) | None -> None
 
