@@ -1,0 +1,26 @@
+(* The form of the Edit dialog of a user, as Confirm_form. *)
+
+let[@client] make ~(id : int) ~(name : string) ~(admin : bool) ~(user : string option) ~children () =
+  <Yuka.Form action=Actions.user_edit>
+    (fun form ->
+      let sent field default = match Yuka.Form.value form field with "" -> default | v -> v in
+      <div>
+        <input type_=`hidden name="id" value=(Int.to_string id) />
+        <label class_="field">"Name"
+          <input name="name" value=(sent `Name name) required=true autofocus=true />
+          (Yuka.Form.field_error_view form `Name (fun ~id message -> <span id class_="field-error">(Yuka.text message)</span>))
+        </label>
+        <label class_="field">"New password (empty: keep)"
+          <input type_=`password name="pass" autocomplete="new-password" />
+          (Yuka.Form.field_error_view form `Pass (fun ~id message -> <span id class_="field-error">(Yuka.text message)</span>))
+        </label>
+        <label class_="check"><input type_=`checkbox name="admin" checked=admin />"Has administrator rights"</label>
+        (Dialog_form.password form ~user)
+        (Dialog_form.errors form)
+        <div class_="dialog-actions">
+          children
+          (Yuka.hole (fun () ->
+             <button type_=`submit class_="button contained" disabled=(Yuka.State.get (Yuka.Form.pending form))>"Save"</button>))
+        </div>
+      </div>)
+  </Yuka.Form>

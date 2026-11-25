@@ -8,6 +8,9 @@ let alert_view = function
   | None -> Yuka.empty
   | Some message -> <p class_="alert" role=`alert>(Yuka.text message)</p>
 
+(* The user name of a session that must give its password in a dialog form. *)
+let password_user (session : Ui.session) = if Ui.elevated session then None else Some session.user.name
+
 let link_button ?(class_ = "button text") href label = <a class_ href>(Yuka.text label)</a>
 
 (* For an action that Gotify allows only to an elevated session: the
@@ -283,11 +286,9 @@ let app_remove_view ~(session : Ui.session) ~id =
       ( "Delete " ^ a.name,
         "/applications",
         fun actions ->
-          <form method_=`post action=(Routes.app_delete ~id ())>
-            <p>"The application and all its messages are deleted."</p>
-            (elevation_field session)
-            (with_submit actions (submit ~class_:"button contained danger" "Delete"))
-          </form> )
+          <Yuka.Client>
+            <Confirm_form target=(Actions.Target.to_string (App_delete id)) text="The application and all its messages are deleted." button="Delete" danger=true user=(password_user session)>actions</Confirm_form>
+          </Yuka.Client> )
 
 let app_token_view ~(session : Ui.session) ~id =
   match find_app session id with
@@ -296,11 +297,9 @@ let app_token_view ~(session : Ui.session) ~id =
       ( "New token for " ^ a.name,
         "/applications",
         fun actions ->
-          <form method_=`post action=(Routes.app_rotate ~id ())>
-            <p>"The current token stops working: update everything that pushes to this application."</p>
-            (elevation_field session)
-            (with_submit actions (submit "New token"))
-          </form> )
+          <Yuka.Client>
+            <Confirm_form target=(Actions.Target.to_string (App_token id)) text="The current token stops working: update everything that pushes to this application." button="New token" danger=false user=(password_user session)>actions</Confirm_form>
+          </Yuka.Client> )
 
 let client_edit_view ~(client : M.client option) ~id =
   match client with
@@ -324,15 +323,10 @@ let client_remove_view ~(session : Ui.session) ~(client : M.client option) ~id =
       ( "Delete " ^ c.name,
         "/clients",
         fun actions ->
-          <form method_=`post action=(Routes.client_delete ~id ())>
-            <p>
-              (Yuka.text
-                 (if c.id = session.client.id then "This is the client of this browser: deleting it signs you out."
-                  else "Apps that use its token lose access."))
-            </p>
-            (elevation_field session)
-            (with_submit actions (submit ~class_:"button contained danger" "Delete"))
-          </form> )
+          <Yuka.Client>
+            <Confirm_form target=(Actions.Target.to_string (Client_delete id)) text=(if c.id = session.client.id then "This is the client of this browser: deleting it signs you out."
+                 else "Apps that use its token lose access.") button="Delete" danger=true user=(password_user session)>actions</Confirm_form>
+          </Yuka.Client> )
 
 let admin_only (session : Ui.session) user = if session.user.admin then user else None
 
@@ -343,15 +337,9 @@ let user_edit_view ~session ~(user : M.user option) ~id =
       ( "Edit " ^ u.name,
         "/users",
         fun actions ->
-          <form method_=`post action=(Routes.user_update ~id ())>
-            <label class_="field">"Name" <input name="name" value=u.name required=true autofocus=true /></label>
-            <label class_="field">"New password (empty: keep)"
-              <input type_=`password name="pass" autocomplete="new-password" />
-            </label>
-            <label class_="check"><input type_=`checkbox name="admin" checked=u.admin />"Has administrator rights"</label>
-            (elevation_field session)
-            (with_submit actions (submit "Save"))
-          </form> )
+          <Yuka.Client>
+            <User_edit_form id name=u.name admin=u.admin user=(password_user session)>actions</User_edit_form>
+          </Yuka.Client> )
 
 let user_remove_view ~session ~(user : M.user option) ~id =
   match admin_only session user with
@@ -360,11 +348,9 @@ let user_remove_view ~session ~(user : M.user option) ~id =
       ( "Delete " ^ u.name,
         "/users",
         fun actions ->
-          <form method_=`post action=(Routes.user_delete ~id ())>
-            <p>"The user, their applications, clients and messages are deleted."</p>
-            (elevation_field session)
-            (with_submit actions (submit ~class_:"button contained danger" "Delete"))
-          </form> )
+          <Yuka.Client>
+            <Confirm_form target=(Actions.Target.to_string (User_delete id)) text="The user, their applications, clients and messages are deleted." button="Delete" danger=true user=(password_user session)>actions</Confirm_form>
+          </Yuka.Client> )
 
 let app_edit ~session ~id ~alert () = dialog Page ~session ~alert (app_edit_view ~session ~id)
 let app_edit_dialog ~session ~id ~alert () = dialog Overlay ~session ~alert (app_edit_view ~session ~id)

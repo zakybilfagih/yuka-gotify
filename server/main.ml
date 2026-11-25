@@ -61,6 +61,7 @@ let () =
   let sessions = Yuka_server.sessions ~secure:!Ui.secure ~secret () in
   Ui.sessions := Some sessions;
   Feed.register ();
+  Handlers.register ();
   let yuka = Yuka_server.handler ~sessions config Yuka_routes.app in
   let handler connection reqd = if not (Gotify_core.Api.dispatch reqd || Static.serve reqd) then yuka connection reqd in
   let name = Option.value (Sys.getenv_opt "GOTIFY_DEFAULTUSER_NAME") ~default:"admin" in

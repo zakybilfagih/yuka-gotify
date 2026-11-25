@@ -98,6 +98,17 @@ let posted req f =
 
 let lwt p = Yuka.Async.bind (Yuka_server.to_async p) Fun.id
 
+(** The session, elevated for an hour when it is not and [pass] is the
+    password of its user; [None] for a missing or wrong password. *)
+let elevate s pass =
+  if elevated s then Lwt.return (Some s)
+  else
+    match pass with
+    | Some pass when Auth.check_password s.user pass ->
+        let client = { s.client with elevated_until = Some (Unix.gettimeofday () +. elevation) } in
+        Lwt.map (fun () -> Some { s with client }) (Db.update_client client)
+    | _ -> Lwt.return None
+
 (** As [posted], for an action that Gotify only allows to an elevated
     session. A session that is not elevated is elevated for an hour by the
     password in the [elevate_pass] field of the form (Pages.elevation_field);
@@ -105,14 +116,13 @@ let lwt p = Yuka.Async.bind (Yuka_server.to_async p) Fun.id
     no such field goes through /elevate. *)
 let posted_elevated req ~back f =
   posted req (fun s fields ->
-      if elevated s then f s fields
-      else
-        match List.assoc_opt "elevate_pass" fields with
-        | None -> redirect (Yuka.Router.with_query "/elevate" [ ("next", back) ])
-        | Some pass when Auth.check_password s.user pass ->
-            let client = { s.client with elevated_until = Some (Unix.gettimeofday () +. elevation) } in
-            lwt (Lwt.map (fun () -> f { s with client } fields) (Db.update_client client))
-        | Some _ -> redirect (with_alert back "Wrong password"))
+      match List.assoc_opt "elevate_pass" fields with
+      | None when not (elevated s) -> redirect (Yuka.Router.with_query "/elevate" [ ("next", back) ])
+      | pass ->
+          lwt
+            (Lwt.map
+               (function Some s -> f s fields | None -> redirect (with_alert back "Wrong password"))
+               (elevate s pass)))
 
 (* Tokens shown once, after a create or a rotation: kept two minutes for
    the user who made them, under a random key in the redirect URL. *)

@@ -1,0 +1,24 @@
+(* The form of a dialog that asks before it acts, such as Delete. [user]: the
+   user name of a session that is not elevated, which must give its password.
+   The children are the Cancel of the dialog. In the browser a submit goes
+   through the action, so a wrong password shows here, in the overlay. *)
+
+let[@client] make ~(target : string) ~(text : string) ~(button : string) ~(danger : bool) ~(user : string option)
+    ~children () =
+  <Yuka.Form action=Actions.confirm>
+    (fun form ->
+      <div>
+        <input type_=`hidden name="target" value=target />
+        <p>(Yuka.text text)</p>
+        (Dialog_form.password form ~user)
+        (Dialog_form.errors form)
+        <div class_="dialog-actions">
+          children
+          (Yuka.hole (fun () ->
+             <button type_=`submit class_=(if danger then "button contained danger" else "button contained")
+               disabled=(Yuka.State.get (Yuka.Form.pending form))>
+               (Yuka.text button)
+             </button>))
+        </div>
+      </div>)
+  </Yuka.Form>
