@@ -50,6 +50,10 @@ let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string)
       if (page ()).more then
         Yuka.Browser.on_visible "next-page" (fun () -> Yuka.Browser.navigate ~replace:true ~keep_scroll:true next)
       else fun () -> ());
+  (* The time the relative dates count from, moved on every 30 s. *)
+  let clock = Yuka.State.make (!Platform.now ()) in
+  Yuka.Effect.after ~cleanup:(fun stop -> stop ()) (fun () ->
+      !Platform.every 30_000 (fun () -> Yuka.State.set clock (!Platform.now ())));
   let failure = Yuka.State.make None in
   let report = function
     | Ok (Ok ()) -> Yuka.State.set failure None
@@ -102,7 +106,7 @@ let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string)
                    <h2 class_="message-title">(Yuka.text m.title)</h2>
                    <span class_="message-app">(Yuka.text m.app_name)</span>
                  </div>
-                 <time class_="message-date">(Yuka.text m.date)</time>
+                 <time class_="message-date" title=m.date>(Yuka.text (Time_ago.text ~now:(Yuka.State.get clock) m.time))</time>
                  <button type_=`button class_="icon-button" aria_label="Delete message" title="Delete"
                    on_click=(delete m.id)>
                    trash

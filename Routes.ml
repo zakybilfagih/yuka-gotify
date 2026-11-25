@@ -10,7 +10,9 @@ let security =
 let routes =
   Router.make ~not_found ~error:error_page ~headers:security ~cache:no_store
     [
-      Router.route Login ~path:"/login" ~page:login ~search:{ failed = optional bool };
+      Router.route Login ~path:"/login" ~page:login ~search:{ failed = optional bool; registered = optional bool };
+      Router.route Register ~path:"/register" ~page:register ~search:{ alert = optional string };
+      Router.post Register_post ~path:"/ui/register" ~handler:Handlers.register_post;
       Router.post Login_post ~path:"/ui/login" ~handler:Handlers.login;
       Router.post Logout ~path:"/ui/logout" ~handler:Handlers.logout;
       Router.post Elevate_post ~path:"/ui/elevate" ~handler:Handlers.elevate;

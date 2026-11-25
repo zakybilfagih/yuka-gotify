@@ -1,0 +1,13 @@
+(* Copies [value] to the clipboard. Hidden until the island starts, so a page
+   without JavaScript shows only the field to select. *)
+
+type state = Idle | Copied | Failed
+
+let[@client] make ~(value : string) () =
+  let started = Yuka.State.make false in
+  let state = Yuka.State.make Idle in
+  Yuka.Effect.after (fun () -> Yuka.State.set started true);
+  <button type_=`button class_="button outlined" hidden=(not (Yuka.State.get started))
+    on_click=(fun _ -> !Platform.copy value (fun ok -> Yuka.State.set state (if ok then Copied else Failed)))>
+    (Yuka.text (match Yuka.State.get state with Idle -> "Copy" | Copied -> "Copied" | Failed -> "Select and copy it"))
+  </button>

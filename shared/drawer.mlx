@@ -1,0 +1,25 @@
+(* The drawer: All Messages and the applications, the current one marked
+   with aria-current. An island, because the layout stays on the screen
+   across client navigations, so only the client knows the current page. *)
+
+let[@client] make ~(apps : Model.app_link list) ~(image : string) () =
+  let current which () =
+    match (Yuka.State.get (Routes.current ()), which) with
+    | Some (Routes.Messages _), None -> `page
+    | Some (Routes.App_messages { app; _ }), Some id when app = id -> `page
+    | _ -> `false_
+  in
+  <nav class_="drawer" aria_label="Applications">
+    <a class_="drawer-item" href=(Routes.messages ()) aria_current=(current None ())>"All Messages"</a>
+    <hr />
+    (Yuka.fragment
+       (List.map
+          (fun (a : Model.app_link) ->
+            <a class_="drawer-item" href=(Routes.app_messages ~app:a.id ()) aria_current=(current (Some a.id) ())>
+              <img src=image alt="" width="24" height="24" />
+              (Yuka.text a.name)
+            </a>)
+          apps))
+    (if apps = [] then <p class_="drawer-empty">"No applications. " <a href=(Routes.applications ())>"Create one"</a></p>
+     else Yuka.empty)
+  </nav>

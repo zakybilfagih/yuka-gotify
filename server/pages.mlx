@@ -2,6 +2,10 @@ open App_shared
 module M = Gotify_core.Model
 
 let version = Gotify_core.Api.version
+(* The release of Gotify that the API follows: the version without "-yuka". *)
+let release =
+  "https://github.com/gotify/server/releases/tag/v" ^ List.hd (String.split_on_char '-' version)
+
 let theme_class theme = "app theme-" ^ theme
 
 let alert_view = function
@@ -29,7 +33,7 @@ let shell ~(session : Ui.session) ~children () =
     <Yuka.Client start=`Idle><Nav_progress /></Yuka.Client>
     <header class_="appbar">
       <a class_="brand" href=(Routes.messages ())>"Gotify"</a>
-      <span class_="brand-version">(Yuka.text ("@" ^ version))</span>
+      <a class_="brand-version" href=release title="Release notes of this Gotify version">(Yuka.text ("@" ^ version))</a>
       <nav class_="appbar-actions" aria_label="Main">
         <form method_=`post action=(Routes.theme ()) class_="inline-form">
           <input type_=`hidden name="theme" value=next_theme />
@@ -48,21 +52,10 @@ let shell ~(session : Ui.session) ~children () =
       </nav>
     </header>
     <div class_="layout">
-      <aside class_="drawer" aria_label="Applications">
-        <a class_="drawer-item" href=(Routes.messages ())>"All Messages"</a>
-        <hr />
-        (Yuka.fragment
-           (List.map
-              (fun (a : M.application) ->
-                <a class_="drawer-item" href=(Routes.app_messages ~app:a.id ())>
-                  <img src=(Static.url "defaultapp.png") alt="" width="24" height="24" />
-                  (Yuka.text a.name)
-                </a>)
-              session.apps))
-        (if session.apps = [] then
-           <p class_="drawer-empty">"No applications. " <a href=(Routes.applications ())>"Create one"</a></p>
-         else Yuka.empty)
-      </aside>
+      <Yuka.Client>
+        <Drawer apps=(List.map (fun (a : M.application) -> { Model.id = a.id; name = a.name }) session.apps)
+          image=(Static.url "defaultapp.png") />
+      </Yuka.Client>
       <main class_="content">children</main>
     </div>
   </div>
@@ -97,7 +90,10 @@ let token_reveal ~kind = function
       <section class_="card reveal" role=`status>
         <h2>(Yuka.text (kind ^ " token for " ^ name))</h2>
         <p>"Copy it now: Gotify shows a token only once."</p>
-        <input class_="token" readonly=true value=token aria_label="Token" />
+        <div class_="row">
+          <input class_="token" readonly=true value=token aria_label="Token" />
+          <Yuka.Client><Copy_button value=token /></Yuka.Client>
+        </div>
       </section>
 
 let priority_input value =
@@ -418,22 +414,52 @@ let elevate ~(session : Ui.session) ~next ~alert () =
         </div>
       </section>)
 
-let login ~failed () =
-  Yuka.Server.page ~title:"Login - Gotify" (fun () ->
+(* The page of the login and register forms, with no session. *)
+let public_card ~title body =
+  Yuka.Server.page ~title:(title ^ " - Gotify") (fun () ->
       <div class_=(theme_class "system")>
         <header class_="appbar"><span class_="brand">"Gotify"</span></header>
-        <main class_="login">
-          <form method_=`post action=(Routes.login_post ()) class_="card stack login-card">
-            <h1>"Login"</h1>
-            (if failed = Some true then <p class_="alert" role=`alert>"Wrong username or password"</p> else Yuka.empty)
-            <label class_="field">"Username" <input name="name" required=true autofocus=true autocomplete="username" /></label>
-            <label class_="field">"Password"
-              <input type_=`password name="pass" required=true autocomplete="current-password" />
-            </label>
-            <button type_=`submit class_="button contained">"Login"</button>
-          </form>
-        </main>
+        <main class_="login">body</main>
       </div>)
+
+let login ~failed ~registered () =
+  public_card ~title:"Login"
+    <form method_=`post action=(Routes.login_post ()) class_="card stack login-card">
+      <h1>"Login"</h1>
+      (if failed = Some true then <p class_="alert" role=`alert>"Wrong username or password"</p> else Yuka.empty)
+      (if registered = Some true then <p class_="notice" role=`status>"User created. You can log in now."</p> else Yuka.empty)
+      <label class_="field">"Username" <input name="name" required=true autofocus=true autocomplete="username" /></label>
+      <label class_="field">"Password"
+        <input type_=`password name="pass" required=true autocomplete="current-password" />
+      </label>
+      <div class_="login-actions">
+        (if !Gotify_core.Api.registration then link_button ~class_:"button outlined" (Routes.register ()) "Register"
+         else Yuka.empty)
+        <button type_=`submit class_="button contained">"Login"</button>
+      </div>
+    </form>
+
+let register ~alert () =
+  public_card ~title:"Register"
+    (if not !Gotify_core.Api.registration then
+       <div class_="card stack login-card">
+         <h1>"Register"</h1>
+         <p>"Registration is disabled on this server."</p>
+         (link_button (Routes.login ()) "Back to login")
+       </div>
+     else
+       <form method_=`post action=(Routes.register_post ()) class_="card stack login-card">
+         <h1>"Register"</h1>
+         (alert_view alert)
+         <label class_="field">"Username" <input name="name" required=true autofocus=true autocomplete="username" /></label>
+         <label class_="field">"Password"
+           <input type_=`password name="pass" required=true autocomplete="new-password" />
+         </label>
+         <div class_="login-actions">
+           (link_button (Routes.login ()) "Back to login")
+           <button type_=`submit class_="button contained">"Register"</button>
+         </div>
+       </form>)
 
 let not_found ~path () =
   Yuka.Server.page ~title:"Not found - Gotify" (fun () ->

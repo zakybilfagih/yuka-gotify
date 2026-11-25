@@ -60,6 +60,7 @@ let () =
   in
   let sessions = Yuka_server.sessions ~secure:!Ui.secure ~secret () in
   Ui.sessions := Some sessions;
+  App_shared.Platform.now := Unix.gettimeofday;
   Feed.register ();
   Handlers.register ();
   let yuka = Yuka_server.handler ~sessions config Yuka_routes.app in

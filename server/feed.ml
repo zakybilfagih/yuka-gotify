@@ -18,6 +18,7 @@ let view (apps : Model.application list) (m : Model.message) : S.Model.message =
     body = Markdown.body ~markdown m.message;
     markdown;
     priority = m.priority;
+    time = m.date;
     date = Ui.date m.date;
   }
 

@@ -47,6 +47,25 @@ let elevate req =
           (let* () = Db.update_client { s.client with elevated_until = Some (Unix.gettimeofday () +. elevation) } in
            Lwt.return (redirect next)))
 
+(* A new user, from the login page, when GOTIFY_REGISTRATION=true, as POST
+   /user with no credentials: never an admin. *)
+let register_post req =
+  Yuka.Async.bind (Ui.form req) (fun fields ->
+      let name = String.trim (Ui.field fields "name") and pass = Ui.field fields "pass" in
+      if not !Api.registration then redirect "/login"
+      else
+        match (name, Auth.validate_password pass) with
+        | "", _ -> back "/register" "The name is required"
+        | _, Error m -> back "/register" m
+        | _, Ok () ->
+            Ui.lwt
+              (let* existing = Db.user_by_name name in
+               match existing with
+               | Some _ -> Lwt.return (back "/register" "username already exists")
+               | None ->
+                   let* _ = Db.create_user ~name ~pass:(Auth.hash_password pass) ~admin:false in
+                   Lwt.return (redirect "/login?registered=true")))
+
 let theme req =
   Yuka.Async.bind (Ui.form req) (fun fields ->
       let t = match Ui.field fields "theme" with ("light" | "dark") as t -> t | _ -> "system" in
