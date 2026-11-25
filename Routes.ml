@@ -15,7 +15,6 @@ let routes =
       Router.post Register_post ~path:"/ui/register" ~handler:Handlers.register_post;
       Router.post Login_post ~path:"/ui/login" ~handler:Handlers.login;
       Router.post Logout ~path:"/ui/logout" ~handler:Handlers.logout;
-      Router.post Elevate_post ~path:"/ui/elevate" ~handler:Handlers.elevate;
       Router.post Theme ~path:"/ui/theme" ~handler:Handlers.theme;
       Router.post App_move ~path:"/ui/applications/:id<int>/move" ~handler:Handlers.app_move;
       Router.group ~path:"/" ~loader:Loaders.session ~layout:shell ~search:{ alert = optional string }
@@ -39,6 +38,5 @@ let routes =
           Router.route User_remove ~path:"/users/:id<int>/delete" ~page:user_remove ?overlay:user_remove_dialog
             ~loader:Loaders.user;
           Router.route Settings ~path:"/settings" ~page:settings;
-          Router.route Elevate ~path:"/elevate" ~page:elevate ~search:{ next = optional string };
         ];
     ]

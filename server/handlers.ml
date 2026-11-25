@@ -37,18 +37,6 @@ let logout req =
          let headers = match Yuka.Server.Cookie.drop Ui.cookie_name with Ok h -> [ h ] | Error _ -> [] in
          Lwt.return (redirect ~headers "/login")))
 
-let elevate req =
-  Ui.posted req (fun s fields ->
-      let next = Ui.safe_next (List.assoc_opt "next" fields) in
-      if not (Auth.check_password s.user (Ui.field fields "pass")) then
-        redirect (Yuka.Router.with_query "/elevate" [ ("next", next); ("alert", "Wrong password") ])
-      else
-        Ui.lwt
-          (let* () = Db.update_client { s.client with elevated_until = Some (Unix.gettimeofday () +. elevation) } in
-           Lwt.return (redirect next)))
-
-(* A new user, from the login page, when GOTIFY_REGISTRATION=true, as POST
-   /user with no credentials: never an admin. *)
 let register_post req =
   Yuka.Async.bind (Ui.form req) (fun fields ->
       let name = String.trim (Ui.field fields "name") and pass = Ui.field fields "pass" in
