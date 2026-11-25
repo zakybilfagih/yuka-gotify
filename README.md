@@ -34,9 +34,12 @@ make init
 ```
 
 `make init` creates a local opam switch in `_opam` with OCaml 5.5.2, pins
-Yuka's patched dune and Melange and the ache HTTP library, pins `yuka` and
-`yuka-server` to Yuka's `main` on GitHub, installs the opam packages, and runs
-`npm install`. The first run builds the compiler and every dependency, so it
+`yuka` and `yuka-server` to Yuka's `main` on GitHub, installs the dependencies
+of `yuka-gotify.opam`, and runs `npm install`. Its `pin-depends`, from
+`yuka-gotify.opam.template`, pin Dave's patched dune and Melange and the ache
+HTTP library. The opam file is generated from
+`dune-project`: after changing the dependencies there, run
+`dune build @opam --auto-promote`. The first run builds the compiler and every dependency, so it
 takes a while.
 
 Yuka is not on opam yet, and its `main` needs two changes to build as a pinned
