@@ -1,4 +1,7 @@
-(* The newest messages of a feed, newest first. *)
-let messages = Yuka.Topic.declare ~name:"messages" ~key:Model.feed_codec ~state:(Yuka.Codec.list Model.message_codec)
+let messages = Yuka.Topic.declare ~name:"messages" ~key:Model.feed_codec ~state:Model.page_codec
 
-let limit = 100
+let per_page = 100
+
+(* The most pages a feed loads; a feed of this many has no next page, so the
+   island does not load the same page again and again. *)
+let max_pages = 10_000

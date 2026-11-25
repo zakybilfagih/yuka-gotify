@@ -64,20 +64,29 @@ let shell ~(session : Ui.session) ~children () =
     </div>
   </div>
 
-let messages ~(session : Ui.session) ~alert () =
-  Yuka.Server.page ~title:"Gotify" (fun () ->
-      let feed = { Model.user = session.user.id; app = None } in
-      Yuka.fragment [ alert_view alert; <Yuka.Client><Message_list feed title="All Messages" image=(Static.url "defaultapp.png") /></Yuka.Client> ])
+(* The page waits for the messages and gives them to the island: in a server
+   render, Yuka.Live.make has the state only when it is already loaded, so a
+   new key, such as one more page, would render an empty list, which the page
+   without JavaScript keeps and the page with it shows until the state comes. *)
+let message_list feed ~title =
+  <Yuka.Await async=(Yuka_server.to_async (Feed.load feed)) blocking=`Yes loading=Yuka.empty>
+    (fun initial -> <Yuka.Client><Message_list feed title initial image=(Static.url "defaultapp.png") /></Yuka.Client>)
+  </Yuka.Await>
 
-let app_messages ~(session : Ui.session) ~app ~alert () =
+let messages ~(session : Ui.session) ~pages ~alert () =
+  Yuka.Server.page ~title:"Gotify" (fun () ->
+      let feed = { Model.user = session.user.id; app = None; pages } in
+      Yuka.fragment [ alert_view alert; message_list feed ~title:"All Messages" ])
+
+let app_messages ~(session : Ui.session) ~app ~pages ~alert () =
   let title =
     match List.find_opt (fun (a : M.application) -> a.id = app) session.apps with
     | Some a -> a.name
     | None -> "Unknown application"
   in
   Yuka.Server.page ~title:(title ^ " - Gotify") (fun () ->
-      let feed = { Model.user = session.user.id; app = Some app } in
-      Yuka.fragment [ alert_view alert; <Yuka.Client><Message_list feed title image=(Static.url "defaultapp.png") /></Yuka.Client> ])
+      let feed = { Model.user = session.user.id; app = Some app; pages } in
+      Yuka.fragment [ alert_view alert; message_list feed ~title ])
 
 let token_reveal ~kind = function
   | None -> Yuka.empty

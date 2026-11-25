@@ -28,8 +28,8 @@ let routes =
       Router.post User_delete ~path:"/ui/users/:id<int>/delete" ~handler:Handlers.user_delete;
       Router.group ~path:"/" ~loader:Loaders.session ~layout:shell ~search:{ alert = optional string }
         [
-          Router.route Messages ~path:"/" ~page:messages;
-          Router.route App_messages ~path:"/messages/:app<int>" ~page:app_messages;
+          Router.route Messages ~path:"/" ~page:messages ~search:{ pages = default int 1 };
+          Router.route App_messages ~path:"/messages/:app<int>" ~page:app_messages ~search:{ pages = default int 1 };
           Router.route Applications ~path:"/applications" ~page:applications ~search:{ reveal = optional string };
           Router.route App_edit ~path:"/applications/:id<int>/edit" ~page:app_edit ?overlay:app_edit_dialog;
           Router.route App_remove ~path:"/applications/:id<int>/delete" ~page:app_remove ?overlay:app_remove_dialog;

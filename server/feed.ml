@@ -21,24 +21,33 @@ let view (apps : Model.application list) (m : Model.message) : S.Model.message =
     date = Ui.date m.date;
   }
 
+(* The feeds loaded for each user, so a change reloads each of them; the key of
+   a feed has its number of pages, which is up to the client. *)
+let loaded : (int, S.Model.feed list) Hashtbl.t = Hashtbl.create 16
+
 let load (f : S.Model.feed) =
+  let feeds = Option.value (Hashtbl.find_opt loaded f.user) ~default:[] in
+  if not (List.mem f feeds) then Hashtbl.replace loaded f.user (f :: feeds);
+  let pages = Int.max 1 (Int.min S.Topics.max_pages f.pages) in
+  (* One more than the pages show, to know whether there is a next page. *)
+  let limit = (pages * S.Topics.per_page) + 1 in
   let* apps = Db.apps_of_user f.user in
   let* ms =
     match f.app with
-    | None -> Db.messages_of_user ~limit:S.Topics.limit ~since:0 f.user
-    | Some app when List.exists (fun (a : Model.application) -> a.id = app) apps ->
-        Db.messages_of_app ~limit:S.Topics.limit ~since:0 app
+    | None -> Db.messages_of_user ~limit ~since:0 f.user
+    | Some app when List.exists (fun (a : Model.application) -> a.id = app) apps -> Db.messages_of_app ~limit ~since:0 app
     | Some _ -> Lwt.return []
   in
-  Lwt.return (List.map (view apps) ms)
+  let more = List.length ms = limit && pages < S.Topics.max_pages in
+  Lwt.return { S.Model.messages = List.map (view apps) (List.filteri (fun i _ -> i < limit - 1) ms); more }
 
 let changed uid =
   Lwt.async (fun () ->
       let* apps = Lwt.catch (fun () -> Db.apps_of_user uid) (fun _ -> Lwt.return []) in
-      Yuka.Server.Live.changed S.Topics.messages { S.Model.user = uid; app = None };
-      List.iter
-        (fun (a : Model.application) -> Yuka.Server.Live.changed S.Topics.messages { S.Model.user = uid; app = Some a.id })
-        apps;
+      let current = function { S.Model.app = None; _ } -> true | { app = Some a; _ } -> List.exists (fun (b : Model.application) -> b.id = a) apps in
+      let feeds = List.filter current (Option.value (Hashtbl.find_opt loaded uid) ~default:[]) in
+      Hashtbl.replace loaded uid feeds;
+      List.iter (Yuka.Server.Live.changed S.Topics.messages) feeds;
       Lwt.return_unit)
 
 let session req =

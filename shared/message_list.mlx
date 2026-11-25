@@ -1,4 +1,9 @@
-(* The live list of messages of a feed, with delete and delete all. *)
+(* The live list of messages of a feed, with delete and delete all. The feed
+   shows its first pages, as many as the URL says (?pages=N). While there are
+   older messages, the list ends with a link to the URL with one more page,
+   which also works without JavaScript; with it, the island follows the link
+   when it comes into view, keeping the scroll and the history entry, so a
+   reload or Back shows every page that was loaded. *)
 
 (* Material's delete icon. Plain ASCII: a non-ASCII OCaml literal is UTF-8
    bytes, which Melange would show byte by byte in the browser. *)
@@ -11,11 +16,20 @@ let trash =
         [];
     ]
 
-let[@client] make ~(feed : Model.feed) ~(title : string) ~(image : string) () =
+let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string) ~(image : string) () =
   let live = Yuka.Live.make Topics.messages (fun () -> feed) in
-  let messages () =
-    match Yuka.Status.data (Yuka.State.get (Yuka.Live.state live)) with Some ms -> ms | None -> []
+  let page () =
+    Option.value (Yuka.Status.data (Yuka.State.get (Yuka.Live.state live))) ~default:initial
   in
+  let messages () = (page ()).messages in
+  let next =
+    let pages = feed.pages + 1 in
+    match feed.app with None -> Routes.messages ~pages () | Some app -> Routes.app_messages ~app ~pages ()
+  in
+  Yuka.Effect.after ~cleanup:(fun stop -> stop ()) (fun () ->
+      if (page ()).more then
+        Yuka.Browser.on_visible "next-page" (fun () -> Yuka.Browser.navigate ~replace:true ~keep_scroll:true next)
+      else fun () -> ());
   let failure = Yuka.State.make None in
   let report = function
     | Ok (Ok ()) -> Yuka.State.set failure None
@@ -25,14 +39,15 @@ let[@client] make ~(feed : Model.feed) ~(title : string) ~(image : string) () =
   let delete (id : int) _ =
     Yuka.Async.on_result
       (Yuka.Live.optimistic live
-         ~change:(List.filter (fun (m : Model.message) -> m.id <> id))
+         ~change:(fun (p : Model.page) ->
+           { p with messages = List.filter (fun (m : Model.message) -> m.id <> id) p.messages })
          (fun () -> Yuka.Action.call Actions.delete_message id))
       report
   in
   let delete_all _ =
     if Yuka.Browser.confirm "Delete all messages?" then
       Yuka.Async.on_result
-        (Yuka.Live.optimistic live ~change:(fun _ -> []) (fun () -> Yuka.Action.call Actions.delete_all feed.app))
+        (Yuka.Live.optimistic live ~change:(fun _ -> { Model.messages = []; more = false }) (fun () -> Yuka.Action.call Actions.delete_all feed.app))
         report
   in
   <section class_="messages">
@@ -71,4 +86,8 @@ let[@client] make ~(feed : Model.feed) ~(title : string) ~(image : string) () =
              </div>
            </li>))
     </ol>
+    <a id="next-page" class_="button outlined load-more" href=next data_yuka_replace="" data_yuka_keep_scroll=""
+      hidden=(not (page ()).more)>
+      (Yuka.text (if Yuka.State.get Yuka.Browser.navigating then "Loading..." else "Load more"))
+    </a>
   </section>
