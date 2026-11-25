@@ -1,0 +1,24 @@
+(library
+ (name gotify_core)
+ (libraries
+  yuka
+  yuka-server
+  ache
+  ache-lwt
+  caqti
+  caqti.classic
+  caqti-lwt
+  caqti-lwt.unix
+  caqti-driver-sqlite3
+  yojson
+  uri
+  lwt
+  lwt.unix
+  ptime
+  ptime.clock.os
+  base64
+  mirage-crypto-ec
+  mirage-crypto-rng
+  mirage-crypto-rng.unix
+  safepass
+  unix))
