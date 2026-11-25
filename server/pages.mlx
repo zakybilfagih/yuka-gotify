@@ -350,6 +350,20 @@ let user_remove_view ~session ~(user : M.user option) ~id =
             <Confirm_form target=(Actions.Target.to_string (User_delete id)) text="The user, their applications, clients and messages are deleted." button="Delete" danger=true user=(password_user session)>actions</Confirm_form>
           </Yuka.Client> )
 
+let app_push_view ~(session : Ui.session) ~app =
+  let back = Routes.app_messages ~app () in
+  match find_app session app with
+  | None -> missing back
+  | Some a ->
+      ( "Push message to " ^ a.name,
+        back,
+        fun actions ->
+          <Yuka.Client>
+            <Push_form app name=a.name priority=a.default_priority>actions</Push_form>
+          </Yuka.Client> )
+
+let app_push ~session ~app ~alert () = dialog Page ~session ~alert (app_push_view ~session ~app)
+let app_push_dialog ~session ~app ~alert () = dialog Overlay ~session ~alert (app_push_view ~session ~app)
 let app_edit ~session ~id ~alert () = dialog Page ~session ~alert (app_edit_view ~session ~id)
 let app_edit_dialog ~session ~id ~alert () = dialog Overlay ~session ~alert (app_edit_view ~session ~id)
 let app_remove ~session ~id ~alert () = dialog Page ~session ~alert (app_remove_view ~session ~id)

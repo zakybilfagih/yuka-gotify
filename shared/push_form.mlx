@@ -1,0 +1,31 @@
+(* The form of the Push message dialog of an application, as Confirm_form:
+   the children are the Cancel of the dialog. *)
+
+let[@client] make ~(app : int) ~(name : string) ~(priority : int) ~children () =
+  <Yuka.Form action=Actions.push>
+    (fun form ->
+      let sent field default = match Yuka.Form.value form field with "" -> default | v -> v in
+      let error field =
+        Yuka.Form.field_error_view form field (fun ~id message -> <span id class_="field-error">(Yuka.text message)</span>)
+      in
+      <div>
+        <input type_=`hidden name="app" value=(Int.to_string app) />
+        <label class_="field">"Title"
+          <input name="title" value=(sent `Title "") placeholder=name autocomplete="off" />
+        </label>
+        <label class_="field">"Message"
+          <textarea name="message" rows=5 required=true autofocus=true>(Yuka.text (sent `Message ""))</textarea>
+          (error `Message)
+        </label>
+        <label class_="field">"Priority"
+          <input type_=`number name="priority" min="0" max="10" required=true value=(sent `Priority (Int.to_string priority)) />
+          (error `Priority)
+        </label>
+        (Dialog_form.errors form)
+        <div class_="dialog-actions">
+          children
+          (Yuka.hole (fun () ->
+             <button type_=`submit class_="button contained" disabled=(Yuka.State.get (Yuka.Form.pending form))>"Push"</button>))
+        </div>
+      </div>)
+  </Yuka.Form>

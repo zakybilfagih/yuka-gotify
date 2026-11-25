@@ -77,9 +77,14 @@ let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string)
   <section class_="messages">
     <header class_="page-header">
       <h1>(Yuka.text title)</h1>
-      <button type_=`button class_="button outlined" disabled=(messages () = []) on_click=delete_all>
-        "Delete all"
-      </button>
+      <div class_="row">
+        (match feed.app with
+         | Some app -> <a class_="button contained" href=(Routes.app_push ~app ())>"Push message"</a>
+         | None -> Yuka.empty)
+        <button type_=`button class_="button outlined" disabled=(messages () = []) on_click=delete_all>
+          "Delete all"
+        </button>
+      </div>
     </header>
     <div class_="card banner" role=`status hidden=(not (disconnected ()))>
       <span>

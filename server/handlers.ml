@@ -250,6 +250,21 @@ let elevated req pass f =
 
 let admin_only (s : Ui.session) f = if s.user.admin then f s else alert "/" "Admins only"
 
+let push req ({ app; title; message; priority } : App_shared.Actions.push) =
+  Yuka_server.to_async
+    (let* s = Ui.find req in
+     match s with
+     | None -> go "/login"
+     | Some s -> (
+         match own_app s app with
+         | None -> alert "/" "No such application"
+         | Some _ when String.trim message = "" -> Lwt.return (Error [ (Some `Message, "The message is required") ])
+         | Some a ->
+             let title = if String.trim title = "" then a.name else title in
+             let* m = Db.create_message ~app_id:a.id ~message ~title ~priority ~extras:None in
+             Stream.publish s.user.id m;
+             go (Routes.app_messages ~app ())))
+
 let register () =
   let module A = App_shared.Actions in
   Yuka.Server.Form.implement A.confirm ~redirect:Fun.id (fun req { target; elevate_pass } ->
@@ -260,4 +275,5 @@ let register () =
           | Client_delete id -> client_delete s id
           | User_delete id -> admin_only s (fun s -> user_delete s id)));
   Yuka.Server.Form.implement A.user_edit ~redirect:Fun.id (fun req (form : A.user_edit) ->
-      elevated req form.elevate_pass (fun s -> admin_only s (fun _ -> user_update form)))
+      elevated req form.elevate_pass (fun s -> admin_only s (fun _ -> user_update form)));
+  Yuka.Server.Form.implement A.push ~redirect:Fun.id push

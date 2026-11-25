@@ -40,3 +40,9 @@ type user_edit = { id : int; name : string; pass : string; admin : bool; elevate
 [@@deriving form]
 
 let user_edit = Yuka.Form.action ~name:"user_edit" ~fields:user_edit_form ~output:Yuka.Codec.string
+
+(** A message pushed from the web UI to one of the user's applications, as
+    POST /message. An empty title is the application's name. *)
+type push = { app : int; title : string; message : string; priority : int } [@@deriving form]
+
+let push = Yuka.Form.action ~name:"push" ~fields:push_form ~output:Yuka.Codec.string
