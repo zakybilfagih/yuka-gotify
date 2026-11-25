@@ -30,31 +30,39 @@ let () =
   Mirage_crypto_rng_unix.use_default ();
   Gotify_core.Api.registration := Sys.getenv_opt "GOTIFY_REGISTRATION" = Some "true";
   let file path = Filename.concat !root path in
+  let dev = Sys.getenv_opt "YUKA_DEV" = Some "1" in
   let dir = file "_build/default/client/out" in
+  let manifest = read (file "_build/default/client/yuka_islands.json") in
+  let metafile = file "dist/meta.json" in
   let assets =
     match
-      Yuka.Server.modules ~dir ~entry:"client/main.js"
-        ~manifest:(read (file "_build/default/client/yuka_islands.json"))
-        ~packages:(Array.to_list (Sys.readdir (Filename.concat dir "node_modules")))
-        ~digest:(Yuka.Server.tree_digest dir)
+      (* `make bundle` writes the esbuild bundle and its metafile in dist/, and its
+         hashed chunks get an immutable cache-control; without them, and in dev, serve the module tree. *)
+      if (not dev) && Sys.file_exists metafile then
+        Yuka.Server.bundle ~dir:(file "dist/client") ~entry:"bundle/main.js" ~manifest
+          ~metafile:(read metafile)
+      else
+        Yuka.Server.modules ~dir ~entry:"client/main.js" ~manifest
+          ~packages:(Array.to_list (Sys.readdir (Filename.concat dir "node_modules")))
+          ~digest:(Yuka.Server.tree_digest dir)
     with
     | Ok assets -> assets
     | Error message ->
         prerr_endline message;
         exit 1
   in
+  Static.load ~dev (file "static");
   let config =
     Yuka.Server.config ~assets
       ~public:[ ("/static", file "static") ]
-      ~styles:[ "/static/style.css" ]
-      ~dev:(Sys.getenv_opt "YUKA_DEV" = Some "1")
-      ()
+      ~styles:[ Static.url "style.css" ]
+      ~dev ()
   in
   let sessions = Yuka_server.sessions ~secure:!Ui.secure ~secret () in
   Ui.sessions := Some sessions;
   Feed.register ();
   let yuka = Yuka_server.handler ~sessions config Yuka_routes.app in
-  let handler connection reqd = if not (Gotify_core.Api.dispatch reqd) then yuka connection reqd in
+  let handler connection reqd = if not (Gotify_core.Api.dispatch reqd || Static.serve reqd) then yuka connection reqd in
   let name = Option.value (Sys.getenv_opt "GOTIFY_DEFAULTUSER_NAME") ~default:"admin" in
   let pass = Option.value (Sys.getenv_opt "GOTIFY_DEFAULTUSER_PASS") ~default:"admin" in
   Lwt_main.run

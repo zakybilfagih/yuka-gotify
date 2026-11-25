@@ -1,0 +1,8 @@
+{
+  "name": "yuka-gotify",
+  "private": true,
+  "description": "Gotify on Yuka: the client bundle build",
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

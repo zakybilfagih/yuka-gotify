@@ -54,7 +54,7 @@ let shell ~(session : Ui.session) ~children () =
            (List.map
               (fun (a : M.application) ->
                 <a class_="drawer-item" href=(Routes.app_messages ~app:a.id ())>
-                  <img src="/static/defaultapp.png" alt="" width="24" height="24" />
+                  <img src=(Static.url "defaultapp.png") alt="" width="24" height="24" />
                   (Yuka.text a.name)
                 </a>)
               session.apps))
@@ -69,7 +69,7 @@ let shell ~(session : Ui.session) ~children () =
 let messages ~(session : Ui.session) ~alert () =
   Yuka.Server.page ~title:"Gotify" (fun () ->
       let feed = { Model.user = session.user.id; app = None } in
-      Yuka.fragment [ alert_view alert; <Yuka.Client><Message_list feed title="All Messages" /></Yuka.Client> ])
+      Yuka.fragment [ alert_view alert; <Yuka.Client><Message_list feed title="All Messages" image=(Static.url "defaultapp.png") /></Yuka.Client> ])
 
 let app_messages ~(session : Ui.session) ~app ~alert () =
   let title =
@@ -79,7 +79,7 @@ let app_messages ~(session : Ui.session) ~app ~alert () =
   in
   Yuka.Server.page ~title:(title ^ " - Gotify") (fun () ->
       let feed = { Model.user = session.user.id; app = Some app } in
-      Yuka.fragment [ alert_view alert; <Yuka.Client><Message_list feed title /></Yuka.Client> ])
+      Yuka.fragment [ alert_view alert; <Yuka.Client><Message_list feed title image=(Static.url "defaultapp.png") /></Yuka.Client> ])
 
 let token_reveal ~kind = function
   | None -> Yuka.empty
@@ -122,7 +122,7 @@ let applications ~(session : Ui.session) ~reveal ~alert () =
                  (List.map
                     (fun (a : M.application) ->
                       <tr>
-                        <td><span class_="name-cell"><img src="/static/defaultapp.png" alt="" width="32" height="32" />(Yuka.text a.name)</span></td>
+                        <td><span class_="name-cell"><img src=(Static.url "defaultapp.png") alt="" width="32" height="32" />(Yuka.text a.name)</span></td>
                         <td>(Yuka.text a.description)</td>
                         <td>(Yuka.int a.default_priority)</td>
                         <td>(Yuka.text (Ui.date_opt a.last_used))</td>

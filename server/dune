@@ -12,6 +12,7 @@
   unix
   yojson
   base64
+  magic-mime
   mirage-crypto-rng
   mirage-crypto-rng.unix)
  (preprocess

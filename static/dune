@@ -1,0 +1,9 @@
+; static/ is served from the source tree. This rule, as in Yuka's demos,
+; only makes `dune build --watch @all` see a change here, so `make dev`
+; reloads the stylesheet.
+(rule
+ (alias all)
+ (deps
+  (glob_files *))
+ (action
+  (progn)))
