@@ -1,0 +1,19 @@
+(* Create or edit a client ([id]), as App_form. *)
+
+let[@client] make ~(id : int option) ~(name : string) ~(expires : int) ~(label : string) ~children () =
+  <Yuka.Form action=Actions.client_save key=(match id with Some id -> Int.to_string id | None -> "new")>
+    (fun form ->
+      <div class_="stack-plain">
+        (match id with Some id -> <input type_=`hidden name="id" value=(Int.to_string id) /> | None -> Yuka.empty)
+        <label class_="field">"Name"
+          <input name="name" value=(Dialog_form.sent form `Name name) required=true autocomplete="off" autofocus=(id <> None) />
+          (Dialog_form.error form `Name)
+        </label>
+        <label class_="field">"Expire after inactivity (seconds, 0 = never)"
+          <input type_=`number name="expires" min="0" value=(Dialog_form.sent form `Expires (Int.to_string expires)) />
+          (Dialog_form.error form `Expires)
+        </label>
+        (Dialog_form.errors form)
+        <div class_="dialog-actions">children (Dialog_form.submit form label)</div>
+      </div>)
+  </Yuka.Form>

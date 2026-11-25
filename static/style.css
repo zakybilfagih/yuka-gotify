@@ -122,6 +122,8 @@ body {
   border-radius: 4px; box-shadow: var(--shadow);
 }
 .stack { display: flex; flex-direction: column; gap: 16px; padding: 16px; }
+.stack-plain { display: flex; flex-direction: column; gap: 16px; }
+.stack-plain > [role="alert"]:empty { display: none; }
 .card.stack + .card.stack { margin-top: 16px; }
 .card h2 { margin: 0; font-size: 20px; font-weight: 500; }
 .row { display: flex; gap: 12px; align-items: center; }

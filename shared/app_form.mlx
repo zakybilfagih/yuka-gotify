@@ -1,0 +1,24 @@
+(* Create or edit an application ([id]). The children are the Cancel of an
+   edit dialog, or nothing for the create form. *)
+
+let[@client] make ~(id : int option) ~(name : string) ~(description : string) ~(priority : int) ~(label : string)
+    ~children () =
+  <Yuka.Form action=Actions.app_save key=(match id with Some id -> Int.to_string id | None -> "new")>
+    (fun form ->
+      <div class_="stack-plain">
+        (match id with Some id -> <input type_=`hidden name="id" value=(Int.to_string id) /> | None -> Yuka.empty)
+        <label class_="field">"Name"
+          <input name="name" value=(Dialog_form.sent form `Name name) required=true autocomplete="off" autofocus=(id <> None) />
+          (Dialog_form.error form `Name)
+        </label>
+        <label class_="field">"Short description"
+          <input name="description" value=(Dialog_form.sent form `Description description) autocomplete="off" />
+        </label>
+        <label class_="field">"Default priority"
+          <input type_=`number name="priority" min="0" max="10" value=(Dialog_form.sent form `Priority (Int.to_string priority)) />
+          (Dialog_form.error form `Priority)
+        </label>
+        (Dialog_form.errors form)
+        <div class_="dialog-actions">children (Dialog_form.submit form label)</div>
+      </div>)
+  </Yuka.Form>

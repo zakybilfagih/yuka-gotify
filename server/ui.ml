@@ -109,21 +109,6 @@ let elevate s pass =
         Lwt.map (fun () -> Some { s with client }) (Db.update_client client)
     | _ -> Lwt.return None
 
-(** As [posted], for an action that Gotify only allows to an elevated
-    session. A session that is not elevated is elevated for an hour by the
-    password in the [elevate_pass] field of the form (Pages.elevation_field);
-    with a wrong one, back to [back], the form, with an alert; a form with
-    no such field goes through /elevate. *)
-let posted_elevated req ~back f =
-  posted req (fun s fields ->
-      match List.assoc_opt "elevate_pass" fields with
-      | None when not (elevated s) -> redirect (Yuka.Router.with_query "/elevate" [ ("next", back) ])
-      | pass ->
-          lwt
-            (Lwt.map
-               (function Some s -> f s fields | None -> redirect (with_alert back "Wrong password"))
-               (elevate s pass)))
-
 (* Tokens shown once, after a create or a rotation: kept two minutes for
    the user who made them, under a random key in the redirect URL. *)
 let reveals : (string, int * string * string * float) Hashtbl.t = Hashtbl.create 8

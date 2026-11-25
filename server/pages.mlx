@@ -17,15 +17,6 @@ let password_user (session : Ui.session) = if Ui.elevated session then None else
 
 let link_button ?(class_ = "button text") href label = <a class_ href>(Yuka.text label)</a>
 
-(* For an action that Gotify allows only to an elevated session: the
-   password, which the handler checks before it acts (Ui.posted_elevated). *)
-let elevation_field (session : Ui.session) =
-  if Ui.elevated session then Yuka.empty
-  else
-    <label class_="field">(Yuka.text ("Password of " ^ session.user.name ^ ", for a recent sign-in"))
-      <input type_=`password name="elevate_pass" required=true autocomplete="current-password" />
-    </label>
-
 let shell ~(session : Ui.session) ~children () =
   let link href label = <a class_="appbar-link" href>(Yuka.text label)</a> in
   let next_theme = if session.theme = "dark" then "light" else "dark" in
@@ -98,11 +89,6 @@ let token_reveal ~kind = function
         </div>
       </section>
 
-let priority_input value =
-  <label class_="field">"Default priority"
-    <input type_=`number name="defaultPriority" min="0" max="10" value=(Int.to_string value) />
-  </label>
-
 let applications ~(session : Ui.session) ~reveal ~alert () =
   Yuka.Server.page ~title:"Applications - Gotify" (fun () ->
       <section>
@@ -113,12 +99,9 @@ let applications ~(session : Ui.session) ~reveal ~alert () =
         (token_reveal ~kind:"Application" (Ui.revealed session reveal))
         <details class_="create">
           <summary class_="button contained">"Create application"</summary>
-          <form method_=`post action=(Routes.app_create ()) class_="stack">
-            <label class_="field">"Name" <input name="name" required=true autocomplete="off" /></label>
-            <label class_="field">"Short description" <input name="description" autocomplete="off" /></label>
-            (priority_input 0)
-            <button type_=`submit class_="button contained">"Create"</button>
-          </form>
+          <div class_="stack">
+            <Yuka.Client><App_form id=None name="" description="" priority=0 label="Create">Yuka.empty</App_form></Yuka.Client>
+          </div>
         </details>
         <div class_="card table-card">
           <Yuka.Client>
@@ -142,13 +125,9 @@ let clients ~(session : Ui.session) ~(clients : M.client list) ~reveal ~alert ()
         (token_reveal ~kind:"Client" (Ui.revealed session reveal))
         <details class_="create">
           <summary class_="button contained">"Create client"</summary>
-          <form method_=`post action=(Routes.client_create ()) class_="stack">
-            <label class_="field">"Name" <input name="name" required=true autocomplete="off" /></label>
-            <label class_="field">"Expire after inactivity (seconds, 0 = never)"
-              <input type_=`number name="expiresAfterInactivitySeconds" min="0" value="0" />
-            </label>
-            <button type_=`submit class_="button contained">"Create"</button>
-          </form>
+          <div class_="stack">
+            <Yuka.Client><Client_form id=None name="" expires=0 label="Create">Yuka.empty</Client_form></Yuka.Client>
+          </div>
         </details>
         <div class_="card table-card">
           <table>
@@ -196,13 +175,9 @@ let users ~(session : Ui.session) ~(users : M.user list) ~alert () =
           (alert_view alert)
           <details class_="create">
             <summary class_="button contained">"Create user"</summary>
-            <form method_=`post action=(Routes.user_create ()) class_="stack">
-              <label class_="field">"Name" <input name="name" required=true autocomplete="off" /></label>
-              <label class_="field">"Password" <input type_=`password name="pass" required=true autocomplete="new-password" /></label>
-              <label class_="check"><input type_=`checkbox name="admin" />"Has administrator rights"</label>
-              (elevation_field session)
-              <button type_=`submit class_="button contained">"Create"</button>
-            </form>
+            <div class_="stack">
+              <Yuka.Client><User_create_form user=(password_user session) /></Yuka.Client>
+            </div>
           </details>
           <div class_="card table-card">
             <table>
@@ -267,12 +242,9 @@ let app_edit_view ~session ~id =
       ( "Edit " ^ a.name,
         "/applications",
         fun actions ->
-          <form method_=`post action=(Routes.app_update ~id ())>
-            <label class_="field">"Name" <input name="name" value=a.name required=true autofocus=true /></label>
-            <label class_="field">"Short description" <input name="description" value=a.description /></label>
-            (priority_input a.default_priority)
-            (with_submit actions (submit "Save"))
-          </form> )
+          <Yuka.Client>
+            <App_form id=(Some id) name=a.name description=a.description priority=a.default_priority label="Save">actions</App_form>
+          </Yuka.Client> )
 
 let app_remove_view ~(session : Ui.session) ~id =
   match find_app session id with
@@ -303,13 +275,9 @@ let client_edit_view ~(client : M.client option) ~id =
       ( "Edit " ^ c.name,
         "/clients",
         fun actions ->
-          <form method_=`post action=(Routes.client_update ~id ())>
-            <label class_="field">"Name" <input name="name" value=c.name required=true autofocus=true /></label>
-            <label class_="field">"Expire after inactivity (seconds, 0 = never)"
-              <input type_=`number name="expiresAfterInactivitySeconds" min="0" value=(Int.to_string c.expires_after) />
-            </label>
-            (with_submit actions (submit "Save"))
-          </form> )
+          <Yuka.Client>
+            <Client_form id=(Some id) name=c.name expires=c.expires_after label="Save">actions</Client_form>
+          </Yuka.Client> )
 
 let client_remove_view ~(session : Ui.session) ~(client : M.client option) ~id =
   match client with
@@ -411,13 +379,7 @@ let settings ~(session : Ui.session) ~alert () =
         </div>
         <div class_="card stack">
           <h2>"Change password"</h2>
-          <form method_=`post action=(Routes.password ()) class_="stack">
-            <label class_="field">"New password"
-              <input type_=`password name="pass" required=true autocomplete="new-password" />
-            </label>
-            (elevation_field session)
-            <button type_=`submit class_="button contained">"Change password"</button>
-          </form>
+          <Yuka.Client><Password_form user=(password_user session) /></Yuka.Client>
         </div>
         <p class_="muted">(Yuka.text ("Signed in as " ^ session.user.name))</p>
       </section>)

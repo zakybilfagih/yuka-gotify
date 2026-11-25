@@ -58,3 +58,22 @@ let durations = [ (3600, "1 hour"); (86400, "1 day"); (30 * 86400, "30 days"); (
 
 (** The ids of all the user's applications, in their new order. *)
 let reorder_apps = Yuka.Action.mutation ~name:"reorder_apps" ~input:(Yuka.Codec.list Yuka.Codec.int) ~output:Yuka.Codec.unit
+
+(* The create and edit forms. [id]: [None] to create, [Some] to edit. Each
+   answers the URL to go to. *)
+
+type app_save = { id : int option; name : string; description : string; priority : int } [@@deriving form]
+
+let app_save = Yuka.Form.action ~name:"app_save" ~fields:app_save_form ~output:Yuka.Codec.string
+
+type client_save = { id : int option; name : string; expires : int } [@@deriving form]
+
+let client_save = Yuka.Form.action ~name:"client_save" ~fields:client_save_form ~output:Yuka.Codec.string
+
+type user_create = { name : string; pass : string; admin : bool; elevate_pass : string option } [@@deriving form]
+
+let user_create = Yuka.Form.action ~name:"user_create" ~fields:user_create_form ~output:Yuka.Codec.string
+
+type password = { pass : string; elevate_pass : string option } [@@deriving form]
+
+let password = Yuka.Form.action ~name:"password" ~fields:password_form ~output:Yuka.Codec.string

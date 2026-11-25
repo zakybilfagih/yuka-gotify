@@ -17,13 +17,7 @@ let routes =
       Router.post Logout ~path:"/ui/logout" ~handler:Handlers.logout;
       Router.post Elevate_post ~path:"/ui/elevate" ~handler:Handlers.elevate;
       Router.post Theme ~path:"/ui/theme" ~handler:Handlers.theme;
-      Router.post Password ~path:"/ui/password" ~handler:Handlers.password;
-      Router.post App_create ~path:"/ui/applications" ~handler:Handlers.app_create;
-      Router.post App_update ~path:"/ui/applications/:id<int>" ~handler:Handlers.app_update;
       Router.post App_move ~path:"/ui/applications/:id<int>/move" ~handler:Handlers.app_move;
-      Router.post Client_create ~path:"/ui/clients" ~handler:Handlers.client_create;
-      Router.post Client_update ~path:"/ui/clients/:id<int>" ~handler:Handlers.client_update;
-      Router.post User_create ~path:"/ui/users" ~handler:Handlers.user_create;
       Router.group ~path:"/" ~loader:Loaders.session ~layout:shell ~search:{ alert = optional string }
         [
           Router.route Messages ~path:"/" ~page:messages ~search:{ pages = default int 1 };

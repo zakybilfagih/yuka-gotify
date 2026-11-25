@@ -76,47 +76,9 @@ let theme req =
       in
       redirect ~headers (Ui.safe_next (List.assoc_opt "next" fields)))
 
-let password req =
-  Ui.posted_elevated req ~back:"/settings" (fun s fields ->
-      let pass = Ui.field fields "pass" in
-      match Auth.validate_password pass with
-      | Error m -> back "/settings" m
-      | Ok () ->
-          Ui.lwt
-            (let* () = Db.update_user { s.user with pass = Auth.hash_password pass } in
-             Lwt.return (back "/settings" "Password changed")))
-
-let priority fields = match int_of_string_opt (String.trim (Ui.field fields "defaultPriority")) with Some p -> p | None -> 0
-
 (* Applications *)
 
 let own_app (s : Ui.session) id = List.find_opt (fun (a : M.application) -> a.id = id) s.apps
-
-let app_create req =
-  Ui.posted req (fun s fields ->
-      match String.trim (Ui.field fields "name") with
-      | "" -> back "/applications" "The name is required"
-      | name ->
-          Ui.lwt
-            (let public, secret = Token.application () in
-             let* _ =
-               Db.create_app ~user_id:s.user.id ~name ~description:(Ui.field fields "description")
-                 ~default_priority:(priority fields) public
-             in
-             let key = Ui.reveal ~user:s.user.id ~name secret in
-             Lwt.return (redirect (Yuka.Router.with_query "/applications" [ ("reveal", key) ]))))
-
-let app_update req ~id =
-  Ui.posted req (fun s fields ->
-      match (own_app s id, String.trim (Ui.field fields "name")) with
-      | None, _ -> back "/applications" "No such application"
-      | _, "" -> back "/applications" "The name is required"
-      | Some a, name ->
-          Ui.lwt
-            (let* () =
-               Db.update_app { a with name; description = Ui.field fields "description"; default_priority = priority fields }
-             in
-             Lwt.return (redirect "/applications")))
 
 (* The new order of the user's applications, when [ids] are all of them. *)
 let reorder (s : Ui.session) ids =
@@ -134,57 +96,10 @@ let app_move req ~id =
 
 (* Clients *)
 
-let expires fields =
-  match int_of_string_opt (String.trim (Ui.field fields "expiresAfterInactivitySeconds")) with
-  | Some n when n >= 0 -> Some n
-  | _ -> None
-
 let own_client (s : Ui.session) id =
   Lwt.map (function Some (c : M.client) when c.user_id = s.user.id -> Some c | _ -> None) (Db.client_by_id id)
 
-let client_create req =
-  Ui.posted req (fun s fields ->
-      match String.trim (Ui.field fields "name") with
-      | "" -> back "/clients" "The name is required"
-      | name ->
-          Ui.lwt
-            (let public, secret = Token.client () in
-             let* _ = Db.create_client ~user_id:s.user.id ~name ?expires_after:(expires fields) public in
-             let key = Ui.reveal ~user:s.user.id ~name secret in
-             Lwt.return (redirect (Yuka.Router.with_query "/clients" [ ("reveal", key) ]))))
-
-let client_update req ~id =
-  Ui.posted req (fun s fields ->
-      Ui.lwt
-        (let* c = own_client s id in
-         match (c, String.trim (Ui.field fields "name")) with
-         | None, _ -> Lwt.return (back "/clients" "No such client")
-         | _, "" -> Lwt.return (back "/clients" "The name is required")
-         | Some c, name ->
-             let* () = Db.update_client { c with name; expires_after = Option.value (expires fields) ~default:c.expires_after } in
-             Lwt.return (redirect "/clients")))
-
 (* Users: admins only, and elevated to change anything, as Gotify 3.1.1. *)
-
-let admin req ~back:path f =
-  Ui.posted_elevated req ~back:path (fun s fields -> if s.user.admin then f s fields else back "/" "Admins only")
-
-let user_create req =
-  admin req ~back:"/users" (fun _ fields ->
-      let name = String.trim (Ui.field fields "name") and pass = Ui.field fields "pass" in
-      match (name, Auth.validate_password pass) with
-      | "", _ -> back "/users" "The name is required"
-      | _, Error m -> back "/users" m
-      | _, Ok () ->
-          Ui.lwt
-            (let* existing = Db.user_by_name name in
-             match existing with
-             | Some _ -> Lwt.return (back "/users" "username already exists")
-             | None ->
-                 let* _ =
-                   Db.create_user ~name ~pass:(Auth.hash_password pass) ~admin:(List.mem_assoc "admin" fields)
-                 in
-                 Lwt.return (redirect "/users")))
 
 (* The forms of the dialogs that need an elevated session (Actions.confirm and
    Actions.user_edit). Each answers the URL to go to, or the errors to show in
@@ -289,6 +204,73 @@ let elevate_client (s : Ui.session) id seconds =
       let* () = Db.update_client { c with elevated_until } in
       go "/clients"
 
+(* The create and edit forms. *)
+
+let field_error field message = Lwt.return (Error [ (Some field, message) ])
+
+(* The session for [f]; without one, the login page. *)
+let signed req f =
+  Yuka_server.to_async
+    (let* s = Ui.find req in
+     match s with None -> go "/login" | Some s -> f s)
+
+let app_save (s : Ui.session) ({ id; name; description; priority } : App_shared.Actions.app_save) =
+  let name = String.trim name in
+  if name = "" then field_error `Name "The name is required"
+  else if priority < 0 || priority > 10 then field_error `Priority "From 0 to 10"
+  else
+    match id with
+    | None ->
+        let public, secret = Token.application () in
+        let* _ = Db.create_app ~user_id:s.user.id ~name ~description ~default_priority:priority public in
+        let key = Ui.reveal ~user:s.user.id ~name secret in
+        go (Yuka.Router.with_query "/applications" [ ("reveal", key) ])
+    | Some id -> (
+        match own_app s id with
+        | None -> alert "/applications" "No such application"
+        | Some a ->
+            let* () = Db.update_app { a with name; description; default_priority = priority } in
+            go "/applications")
+
+let client_save (s : Ui.session) ({ id; name; expires } : App_shared.Actions.client_save) =
+  let name = String.trim name in
+  if name = "" then field_error `Name "The name is required"
+  else if expires < 0 then field_error `Expires "Not a valid number of seconds"
+  else
+    match id with
+    | None ->
+        let public, secret = Token.client () in
+        let* _ = Db.create_client ~user_id:s.user.id ~name ~expires_after:expires public in
+        let key = Ui.reveal ~user:s.user.id ~name secret in
+        go (Yuka.Router.with_query "/clients" [ ("reveal", key) ])
+    | Some id -> (
+        let* c = own_client s id in
+        match c with
+        | None -> alert "/clients" "No such client"
+        | Some c ->
+            let* () = Db.update_client { c with name; expires_after = expires } in
+            go "/clients")
+
+let user_create ({ name; pass; admin; elevate_pass = _ } : App_shared.Actions.user_create) =
+  let name = String.trim name in
+  match (name, Auth.validate_password pass) with
+  | "", _ -> field_error `Name "The name is required"
+  | _, Error m -> field_error `Pass m
+  | _, Ok () -> (
+      let* existing = Db.user_by_name name in
+      match existing with
+      | Some _ -> field_error `Name "username already exists"
+      | None ->
+          let* _ = Db.create_user ~name ~pass:(Auth.hash_password pass) ~admin in
+          go "/users")
+
+let password (s : Ui.session) ({ pass; elevate_pass = _ } : App_shared.Actions.password) =
+  match Auth.validate_password pass with
+  | Error m -> field_error `Pass m
+  | Ok () ->
+      let* () = Db.update_user { s.user with pass = Auth.hash_password pass } in
+      go (Ui.with_alert "/settings" "Password changed")
+
 let register () =
   let module A = App_shared.Actions in
   Yuka.Server.Action.implement A.reorder_apps (fun req ids ->
@@ -308,4 +290,10 @@ let register () =
       elevated req form.elevate_pass (fun s -> admin_only s (fun _ -> user_update form)));
   Yuka.Server.Form.implement A.push ~redirect:Fun.id push;
   Yuka.Server.Form.implement A.elevate ~redirect:Fun.id (fun req { id; seconds; elevate_pass } ->
-      elevated req elevate_pass (fun s -> elevate_client s id seconds))
+      elevated req elevate_pass (fun s -> elevate_client s id seconds));
+  Yuka.Server.Form.implement A.app_save ~redirect:Fun.id (fun req form -> signed req (fun s -> app_save s form));
+  Yuka.Server.Form.implement A.client_save ~redirect:Fun.id (fun req form -> signed req (fun s -> client_save s form));
+  Yuka.Server.Form.implement A.user_create ~redirect:Fun.id (fun req (form : A.user_create) ->
+      elevated req form.elevate_pass (fun s -> admin_only s (fun _ -> user_create form)));
+  Yuka.Server.Form.implement A.password ~redirect:Fun.id (fun req (form : A.password) ->
+      elevated req form.elevate_pass (fun s -> password s form))

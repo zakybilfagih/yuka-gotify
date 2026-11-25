@@ -18,3 +18,19 @@ let password form ~user =
         ]
 
 let errors form = Yuka.Form.form_errors_view form (fun message -> Yuka.element "p" [ Yuka.attr "class" "alert" ] [ Yuka.text message ])
+
+(** The value sent after a failed post (422), else [default]. *)
+let sent form field default = match Yuka.Form.value form field with "" -> default | v -> v
+
+(** The error of a field, under it. *)
+let error form field =
+  Yuka.Form.field_error_view form field (fun ~id message ->
+      Yuka.element "span" [ Yuka.attr "id" id; Yuka.attr "class" "field-error" ] [ Yuka.text message ])
+
+(** The submit button, disabled while the form waits. *)
+let submit ?(class_ = "button contained") form label =
+  Yuka.hole (fun () ->
+      Yuka.element "button"
+        ([ Yuka.attr "type" "submit"; Yuka.attr "class" class_ ]
+        @ if Yuka.State.get (Yuka.Form.pending form) then [ Yuka.attr "disabled" "" ] else [])
+        [ Yuka.text label ])
