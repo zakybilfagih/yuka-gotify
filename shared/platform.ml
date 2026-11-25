@@ -27,3 +27,6 @@ let notify : (title:string -> body:string -> icon:string -> unit) ref = ref (fun
 (** [after ms f] calls [f] once, in [ms] milliseconds, and gives the
     function that cancels it. *)
 let after : (int -> (unit -> unit) -> unit -> unit) ref = ref (fun _ _ () -> ())
+
+(** Whether the element with this id has more content than it shows. *)
+let overflows : (string -> bool) ref = ref (fun _ -> false)

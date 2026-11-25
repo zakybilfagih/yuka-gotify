@@ -145,6 +145,9 @@ body {
 .message-date { color: var(--text); font-size: 15px; white-space: nowrap; padding-top: 4px; }
 .message-body { margin-top: 8px; word-break: break-word; }
 .message-body.plain { white-space: pre-wrap; }
+.message-body.collapsed { max-height: 250px; overflow: hidden; }
+.message-body.clipped { mask-image: linear-gradient(to bottom, #000 70%, transparent); }
+.button.read-more { margin: 4px 0 0 -8px; padding: 4px 8px; }
 .message-body p { margin: 0 0 8px; }
 .message-body a { color: #ff7f50; }
 .message-body pre { overflow: auto; border-radius: .25em; background: var(--code); padding: 8px; }

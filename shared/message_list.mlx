@@ -17,6 +17,7 @@ let trash =
     ]
 
 let undo_ms = 5000
+let body_id id = "message-body-" ^ Int.to_string id
 
 let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string) ~(image : string) () =
   let live = Yuka.Live.make Topics.messages (fun () -> feed) in
@@ -64,6 +65,27 @@ let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string)
   let clock = Yuka.State.make (!Platform.now ()) in
   Yuka.Effect.after ~cleanup:(fun stop -> stop ()) (fun () ->
       !Platform.every 30_000 (fun () -> Yuka.State.set clock (!Platform.now ())));
+  (* Read more: once the island runs, a long body is cut at the height of
+     .message-body.collapsed, with a button to show it all. Without
+     JavaScript every body shows in full. [overflowing]: the ids whose body
+     is cut, measured after each change of the list and on a resize. *)
+  let started = Yuka.State.make false in
+  let expanded = Yuka.State.make [] in
+  let overflowing = Yuka.State.make [] in
+  let measure () =
+    let open_ = Yuka.State.peek expanded in
+    Yuka.State.set overflowing
+      (List.filter_map
+         (fun (m : Model.message) ->
+           if List.mem m.id open_ || !Platform.overflows (body_id m.id) then Some m.id else None)
+         (messages ()))
+  in
+  Yuka.Effect.after (fun () -> Yuka.State.set started true);
+  Yuka.Effect.after (fun () -> if Yuka.State.get started then measure ());
+  Yuka.Effect.after (fun () -> Yuka.Browser.on_window "resize" (fun _ -> measure ()));
+  let toggle id _ =
+    Yuka.State.update expanded (fun ids -> if List.mem id ids then List.filter (( <> ) id) ids else id :: ids)
+  in
   let failure = Yuka.State.make None in
   let report = function
     | Ok (Ok ()) -> Yuka.State.set failure None
@@ -157,9 +179,21 @@ let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string)
                    trash
                  </button>
                </div>
-               <div class_=(if m.markdown then "message-body markdown" else "message-body plain")>
+               <div id=(body_id m.id)
+                 class_=(String.concat " "
+                           [
+                             "message-body";
+                             (if m.markdown then "markdown" else "plain");
+                             (if Yuka.State.get started && not (List.mem m.id (Yuka.State.get expanded)) then
+                                if List.mem m.id (Yuka.State.get overflowing) then "collapsed clipped" else "collapsed"
+                              else "");
+                           ])>
                  (Yuka.fragment (List.map Markup.view m.body))
                </div>
+               <button type_=`button class_="button text read-more" hidden=(not (List.mem m.id (Yuka.State.get overflowing)))
+                 aria_expanded=(List.mem m.id (Yuka.State.get expanded)) aria_controls=(body_id m.id) on_click=(toggle m.id)>
+                 (Yuka.text (if List.mem m.id (Yuka.State.get expanded) then "Read less" else "Read more"))
+               </button>
              </div>
            </li>))
     </ol>

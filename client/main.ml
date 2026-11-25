@@ -8,6 +8,9 @@ let every : int -> (unit -> unit) -> unit -> unit =
 let after : int -> (unit -> unit) -> unit -> unit =
   [%mel.raw {|function (ms, f) { var id = setTimeout(function () { f() }, ms); return function () { clearTimeout(id) } }|}]
 
+let overflows : string -> bool =
+  [%mel.raw {|function (id) { var e = document.getElementById(id); return !!e && e.scrollHeight > e.clientHeight + 1 }|}]
+
 let copy : string -> (bool -> unit) -> unit =
   [%mel.raw
     {|function (text, k) { if (!navigator.clipboard) { k(false); return } navigator.clipboard.writeText(text).then(function () { k(true) }, function () { k(false) }) }|}]
@@ -30,5 +33,6 @@ let () =
   Platform.now := now;
   Platform.every := every;
   Platform.after := after;
+  Platform.overflows := overflows;
   Platform.copy := copy;
   Yuka.render ~islands:Yuka_islands.registry ()
