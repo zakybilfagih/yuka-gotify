@@ -55,6 +55,8 @@ let find req =
               let* apps = Db.apps_of_user user.id in
               Lwt.return (Some { user; client; apps; theme = theme req })))
 
+(* How long a password confirmation elevates a session, as Gotify 3.1.1. *)
+let elevation = 3600.
 let elevated s = M.elevated ~now:(Unix.gettimeofday ()) s.client
 
 (* Answers *)
@@ -83,12 +85,23 @@ let posted req f =
     | None -> redirect "/login"
     | Some s -> Yuka.Async.bind (form req) (fun fields -> f s fields))
 
-(** As [posted], for an action that Gotify only allows to an elevated session. *)
+let lwt p = Yuka.Async.bind (Yuka_server.to_async p) Fun.id
+
+(** As [posted], for an action that Gotify only allows to an elevated
+    session. A session that is not elevated is elevated for an hour by the
+    password in the [elevate_pass] field of the form (Pages.elevation_field);
+    with a wrong one, back to [back], the form, with an alert; a form with
+    no such field goes through /elevate. *)
 let posted_elevated req ~back f =
   posted req (fun s fields ->
-      if elevated s then f s fields else redirect (Yuka.Router.with_query "/elevate" [ ("next", back) ]))
-
-let lwt p = Yuka.Async.bind (Yuka_server.to_async p) Fun.id
+      if elevated s then f s fields
+      else
+        match List.assoc_opt "elevate_pass" fields with
+        | None -> redirect (Yuka.Router.with_query "/elevate" [ ("next", back) ])
+        | Some pass when Auth.check_password s.user pass ->
+            let client = { s.client with elevated_until = Some (Unix.gettimeofday () +. elevation) } in
+            lwt (Lwt.map (fun () -> f { s with client } fields) (Db.update_client client))
+        | Some _ -> redirect (with_alert back "Wrong password"))
 
 (* Tokens shown once, after a create or a rotation: kept two minutes for
    the user who made them, under a random key in the redirect URL. *)

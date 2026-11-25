@@ -1,0 +1,11 @@
+(* Closes the dialog of an overlay route: the backdrop behind it, or its
+   Cancel button, which also listens for Escape. An overlay shows only
+   after a client navigation, so this island always has JavaScript. *)
+
+let[@client] make ~(backdrop : bool) () =
+  if backdrop then <div class_="overlay-backdrop" on_click=(fun _ -> Yuka.Browser.back ()) />
+  else begin
+    Yuka.Effect.after (fun () ->
+        Yuka.Browser.on_window "keydown" (fun event -> if Yuka.Event.key event = "Escape" then Yuka.Browser.back ()));
+    <button type_=`button class_="button text" on_click=(fun _ -> Yuka.Browser.back ())>"Cancel"</button>
+  end

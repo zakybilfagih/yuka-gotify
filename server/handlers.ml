@@ -2,12 +2,13 @@
    ?alert= on bad input, so every form works without JavaScript. *)
 
 open Gotify_core
+module Routes = App_shared.Routes
 module M = Gotify_core.Model
 
 let ( let* ) = Lwt.bind
 let redirect = Ui.redirect
 let back path message = redirect (Ui.with_alert path message)
-let elevation = 3600.
+let elevation = Ui.elevation
 
 let login req =
   Yuka.Async.bind (Ui.form req) (fun fields ->
@@ -99,7 +100,7 @@ let app_update req ~id =
              Lwt.return (redirect "/applications")))
 
 let app_rotate req ~id =
-  Ui.posted_elevated req ~back:"/applications" (fun s _ ->
+  Ui.posted_elevated req ~back:(Routes.app_token ~id ()) (fun s _ ->
       match own_app s id with
       | None -> back "/applications" "No such application"
       | Some a ->
@@ -110,7 +111,7 @@ let app_rotate req ~id =
              Lwt.return (redirect (Yuka.Router.with_query "/applications" [ ("reveal", key) ]))))
 
 let app_delete req ~id =
-  Ui.posted_elevated req ~back:"/applications" (fun s _ ->
+  Ui.posted_elevated req ~back:(Routes.app_remove ~id ()) (fun s _ ->
       match own_app s id with
       | None -> back "/applications" "No such application"
       | Some a when a.internal -> back "/applications" "Cannot delete an internal application"
@@ -153,7 +154,7 @@ let client_update req ~id =
              Lwt.return (redirect "/clients")))
 
 let client_delete req ~id =
-  Ui.posted_elevated req ~back:"/clients" (fun s _ ->
+  Ui.posted_elevated req ~back:(Routes.client_remove ~id ()) (fun s _ ->
       Ui.lwt
         (let* c = own_client s id in
          match c with
@@ -186,28 +187,29 @@ let user_create req =
                  Lwt.return (redirect "/users")))
 
 let user_update req ~id =
-  admin req ~back:"/users" (fun _ fields ->
+  let form = Routes.user_edit ~id () in
+  admin req ~back:form (fun _ fields ->
       let name = String.trim (Ui.field fields "name") and pass = Ui.field fields "pass" in
       let admin = List.mem_assoc "admin" fields in
       Ui.lwt
         (let* u = Db.user_by_id id in
          let* admins = Db.count_admins () in
          match u with
-         | None -> Lwt.return (back "/users" "user does not exist")
-         | Some _ when name = "" -> Lwt.return (back "/users" "The name is required")
-         | Some u when u.admin && (not admin) && admins = 1 -> Lwt.return (back "/users" "cannot delete last admin")
+         | None -> Lwt.return (back form "user does not exist")
+         | Some _ when name = "" -> Lwt.return (back form "The name is required")
+         | Some u when u.admin && (not admin) && admins = 1 -> Lwt.return (back form "cannot delete last admin")
          | Some u -> (
              match if pass = "" then Ok u.pass else Result.map (fun () -> Auth.hash_password pass) (Auth.validate_password pass) with
-             | Error m -> Lwt.return (back "/users" m)
+             | Error m -> Lwt.return (back form m)
              | Ok hash ->
                  Lwt.catch
                    (fun () ->
                      let* () = Db.update_user { u with name; admin; pass = hash } in
                      Lwt.return (redirect "/users"))
-                   (fun _ -> Lwt.return (back "/users" "username already exists")))))
+                   (fun _ -> Lwt.return (back form "username already exists")))))
 
 let user_delete req ~id =
-  admin req ~back:"/users" (fun s _ ->
+  admin req ~back:(Routes.user_remove ~id ()) (fun s _ ->
       Ui.lwt
         (let* u = Db.user_by_id id in
          let* admins = Db.count_admins () in

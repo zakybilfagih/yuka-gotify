@@ -31,8 +31,18 @@ let routes =
           Router.route Messages ~path:"/" ~page:messages;
           Router.route App_messages ~path:"/messages/:app<int>" ~page:app_messages;
           Router.route Applications ~path:"/applications" ~page:applications ~search:{ reveal = optional string };
+          Router.route App_edit ~path:"/applications/:id<int>/edit" ~page:app_edit ?overlay:app_edit_dialog;
+          Router.route App_remove ~path:"/applications/:id<int>/delete" ~page:app_remove ?overlay:app_remove_dialog;
+          Router.route App_token ~path:"/applications/:id<int>/token" ~page:app_token ?overlay:app_token_dialog;
           Router.route Clients ~path:"/clients" ~page:Pages.clients ~loader:Loaders.clients ~search:{ reveal = optional string };
+          Router.route Client_edit ~path:"/clients/:id<int>/edit" ~page:client_edit ?overlay:client_edit_dialog
+            ~loader:Loaders.client;
+          Router.route Client_remove ~path:"/clients/:id<int>/delete" ~page:client_remove ?overlay:client_remove_dialog
+            ~loader:Loaders.client;
           Router.route Users ~path:"/users" ~page:Pages.users ~loader:Loaders.users;
+          Router.route User_edit ~path:"/users/:id<int>/edit" ~page:user_edit ?overlay:user_edit_dialog ~loader:Loaders.user;
+          Router.route User_remove ~path:"/users/:id<int>/delete" ~page:user_remove ?overlay:user_remove_dialog
+            ~loader:Loaders.user;
           Router.route Settings ~path:"/settings" ~page:settings;
           Router.route Elevate ~path:"/elevate" ~page:elevate ~search:{ next = optional string };
         ];

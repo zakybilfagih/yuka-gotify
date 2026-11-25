@@ -8,24 +8,22 @@ let alert_view = function
   | None -> Yuka.empty
   | Some message -> <p class_="alert" role=`alert>(Yuka.text message)</p>
 
-let post_button ~action ~label ?(class_ = "button text") () =
-  <form method_=`post action class_="inline-form"><button type_=`submit class_>(Yuka.text label)</button></form>
+let link_button ?(class_ = "button text") href label = <a class_ href>(Yuka.text label)</a>
 
-(* A delete that asks first, with no JavaScript: the confirm button shows
-   when the summary is opened. *)
-let confirm_delete ~action ~what () =
-  <details class_="confirm">
-    <summary class_="button text danger">"Delete"</summary>
-    <div class_="confirm-panel card">
-      <p>(Yuka.text ("Delete " ^ what ^ "?"))</p>
-      (post_button ~action ~label:"Confirm delete" ~class_:"button contained danger" ())
-    </div>
-  </details>
+(* For an action that Gotify allows only to an elevated session: the
+   password, which the handler checks before it acts (Ui.posted_elevated). *)
+let elevation_field (session : Ui.session) =
+  if Ui.elevated session then Yuka.empty
+  else
+    <label class_="field">(Yuka.text ("Password of " ^ session.user.name ^ ", for a recent sign-in"))
+      <input type_=`password name="elevate_pass" required=true autocomplete="current-password" />
+    </label>
 
 let shell ~(session : Ui.session) ~children () =
   let link href label = <a class_="appbar-link" href>(Yuka.text label)</a> in
   let next_theme = if session.theme = "dark" then "light" else "dark" in
   <div class_=(theme_class session.theme)>
+    <Yuka.Client start=`Idle><Nav_progress /></Yuka.Client>
     <header class_="appbar">
       <a class_="brand" href=(Routes.messages ())>"Gotify"</a>
       <span class_="brand-version">(Yuka.text ("@" ^ version))</span>
@@ -126,18 +124,10 @@ let applications ~(session : Ui.session) ~reveal ~alert () =
                         <td>(Yuka.text a.description)</td>
                         <td>(Yuka.int a.default_priority)</td>
                         <td>(Yuka.text (Ui.date_opt a.last_used))</td>
-                        <td>(post_button ~action:(Routes.app_rotate ~id:a.id ()) ~label:"New token" ())</td>
+                        <td>(link_button (Routes.app_token ~id:a.id ()) "New token")</td>
                         <td class_="actions">
-                          <details class_="edit">
-                            <summary class_="button text">"Edit"</summary>
-                            <form method_=`post action=(Routes.app_update ~id:a.id ()) class_="stack card edit-panel">
-                              <label class_="field">"Name" <input name="name" value=a.name required=true /></label>
-                              <label class_="field">"Short description" <input name="description" value=a.description /></label>
-                              (priority_input a.default_priority)
-                              <button type_=`submit class_="button contained">"Save"</button>
-                            </form>
-                          </details>
-                          (confirm_delete ~action:(Routes.app_delete ~id:a.id ()) ~what:("the application " ^ a.name) ())
+                          (link_button (Routes.app_edit ~id:a.id ()) "Edit")
+                          (link_button ~class_:"button text danger" (Routes.app_remove ~id:a.id ()) "Delete")
                         </td>
                       </tr>)
                     session.apps))
@@ -180,18 +170,8 @@ let clients ~(session : Ui.session) ~(clients : M.client list) ~reveal ~alert ()
                         <td>(Yuka.text (match M.expires_at c with Some t -> Ui.date t | None -> "never"))</td>
                         <td>(Yuka.text (if M.elevated ~now c then "until " ^ Ui.date_opt c.elevated_until else "no"))</td>
                         <td class_="actions">
-                          <details class_="edit">
-                            <summary class_="button text">"Edit"</summary>
-                            <form method_=`post action=(Routes.client_update ~id:c.id ()) class_="stack card edit-panel">
-                              <label class_="field">"Name" <input name="name" value=c.name required=true /></label>
-                              <label class_="field">"Expire after inactivity (seconds)"
-                                <input type_=`number name="expiresAfterInactivitySeconds" min="0"
-                                  value=(Int.to_string c.expires_after) />
-                              </label>
-                              <button type_=`submit class_="button contained">"Save"</button>
-                            </form>
-                          </details>
-                          (confirm_delete ~action:(Routes.client_delete ~id:c.id ()) ~what:("the client " ^ c.name) ())
+                          (link_button (Routes.client_edit ~id:c.id ()) "Edit")
+                          (link_button ~class_:"button text danger" (Routes.client_remove ~id:c.id ()) "Delete")
                         </td>
                       </tr>)
                     clients))
@@ -213,6 +193,7 @@ let users ~(session : Ui.session) ~(users : M.user list) ~alert () =
               <label class_="field">"Name" <input name="name" required=true autocomplete="off" /></label>
               <label class_="field">"Password" <input type_=`password name="pass" required=true autocomplete="new-password" /></label>
               <label class_="check"><input type_=`checkbox name="admin" />"Has administrator rights"</label>
+              (elevation_field session)
               <button type_=`submit class_="button contained">"Create"</button>
             </form>
           </details>
@@ -228,18 +209,8 @@ let users ~(session : Ui.session) ~(users : M.user list) ~alert () =
                           <td>(Yuka.text (if u.admin then "Yes" else "No"))</td>
                           <td>(Yuka.text (Ui.date u.created_at))</td>
                           <td class_="actions">
-                            <details class_="edit">
-                              <summary class_="button text">"Edit"</summary>
-                              <form method_=`post action=(Routes.user_update ~id:u.id ()) class_="stack card edit-panel">
-                                <label class_="field">"Name" <input name="name" value=u.name required=true /></label>
-                                <label class_="field">"New password (empty: keep)"
-                                  <input type_=`password name="pass" autocomplete="new-password" />
-                                </label>
-                                <label class_="check"><input type_=`checkbox name="admin" checked=u.admin />"Has administrator rights"</label>
-                                <button type_=`submit class_="button contained">"Save"</button>
-                              </form>
-                            </details>
-                            (confirm_delete ~action:(Routes.user_delete ~id:u.id ()) ~what:("the user " ^ u.name) ())
+                            (link_button (Routes.user_edit ~id:u.id ()) "Edit")
+                            (link_button ~class_:"button text danger" (Routes.user_remove ~id:u.id ()) "Delete")
                           </td>
                         </tr>)
                       users))
@@ -247,6 +218,162 @@ let users ~(session : Ui.session) ~(users : M.user list) ~alert () =
             </table>
           </div>
         </section>)
+
+(* Dialogs. Each route of Routes.ml has one view, shown two ways: as an
+   overlay over its list after a click (client navigation), or as a page of
+   its own on a direct load, a reload or without JavaScript. A view is its
+   title, the list it closes to and its body, which gets the Cancel to place. *)
+
+type frame = Page | Overlay
+
+let dialog frame ~(session : Ui.session) ~alert (title, back, body) =
+  Yuka.Server.page ~title:(title ^ " - Gotify") (fun () ->
+      let card cancel =
+        <div class_="card dialog" role=`dialog aria_modal=true aria_labelledby="overlay-title">
+          <h2 id="overlay-title">(Yuka.text title)</h2>
+          (alert_view alert)
+          (body cancel)
+        </div>
+      in
+      match frame with
+      | Page -> <section class_="narrow dialog-page">(card (link_button back "Cancel"))</section>
+      | Overlay ->
+          <div class_=(theme_class session.theme ^ " overlay")>
+            <Yuka.Client><Overlay_close backdrop=true /></Yuka.Client>
+            (card <Yuka.Client><Overlay_close backdrop=false /></Yuka.Client>)
+          </div>)
+
+let submit ?(class_ = "button contained") label = <button type_=`submit class_>(Yuka.text label)</button>
+
+(* The actions row: the Cancel, then the submit button. *)
+let with_submit cancel button = <div class_="dialog-actions">cancel button</div>
+
+let missing back =
+  ("Not found", back, fun cancel -> Yuka.fragment [ <p>"It does not exist anymore."</p>; <div class_="dialog-actions">cancel</div> ])
+
+let find_app (session : Ui.session) id = List.find_opt (fun (a : M.application) -> a.id = id) session.apps
+
+let app_edit_view ~session ~id =
+  match find_app session id with
+  | None -> missing "/applications"
+  | Some a ->
+      ( "Edit " ^ a.name,
+        "/applications",
+        fun actions ->
+          <form method_=`post action=(Routes.app_update ~id ())>
+            <label class_="field">"Name" <input name="name" value=a.name required=true autofocus=true /></label>
+            <label class_="field">"Short description" <input name="description" value=a.description /></label>
+            (priority_input a.default_priority)
+            (with_submit actions (submit "Save"))
+          </form> )
+
+let app_remove_view ~(session : Ui.session) ~id =
+  match find_app session id with
+  | None -> missing "/applications"
+  | Some a ->
+      ( "Delete " ^ a.name,
+        "/applications",
+        fun actions ->
+          <form method_=`post action=(Routes.app_delete ~id ())>
+            <p>"The application and all its messages are deleted."</p>
+            (elevation_field session)
+            (with_submit actions (submit ~class_:"button contained danger" "Delete"))
+          </form> )
+
+let app_token_view ~(session : Ui.session) ~id =
+  match find_app session id with
+  | None -> missing "/applications"
+  | Some a ->
+      ( "New token for " ^ a.name,
+        "/applications",
+        fun actions ->
+          <form method_=`post action=(Routes.app_rotate ~id ())>
+            <p>"The current token stops working: update everything that pushes to this application."</p>
+            (elevation_field session)
+            (with_submit actions (submit "New token"))
+          </form> )
+
+let client_edit_view ~(client : M.client option) ~id =
+  match client with
+  | None -> missing "/clients"
+  | Some c ->
+      ( "Edit " ^ c.name,
+        "/clients",
+        fun actions ->
+          <form method_=`post action=(Routes.client_update ~id ())>
+            <label class_="field">"Name" <input name="name" value=c.name required=true autofocus=true /></label>
+            <label class_="field">"Expire after inactivity (seconds, 0 = never)"
+              <input type_=`number name="expiresAfterInactivitySeconds" min="0" value=(Int.to_string c.expires_after) />
+            </label>
+            (with_submit actions (submit "Save"))
+          </form> )
+
+let client_remove_view ~(session : Ui.session) ~(client : M.client option) ~id =
+  match client with
+  | None -> missing "/clients"
+  | Some c ->
+      ( "Delete " ^ c.name,
+        "/clients",
+        fun actions ->
+          <form method_=`post action=(Routes.client_delete ~id ())>
+            <p>
+              (Yuka.text
+                 (if c.id = session.client.id then "This is the client of this browser: deleting it signs you out."
+                  else "Apps that use its token lose access."))
+            </p>
+            (elevation_field session)
+            (with_submit actions (submit ~class_:"button contained danger" "Delete"))
+          </form> )
+
+let admin_only (session : Ui.session) user = if session.user.admin then user else None
+
+let user_edit_view ~session ~(user : M.user option) ~id =
+  match admin_only session user with
+  | None -> missing "/users"
+  | Some u ->
+      ( "Edit " ^ u.name,
+        "/users",
+        fun actions ->
+          <form method_=`post action=(Routes.user_update ~id ())>
+            <label class_="field">"Name" <input name="name" value=u.name required=true autofocus=true /></label>
+            <label class_="field">"New password (empty: keep)"
+              <input type_=`password name="pass" autocomplete="new-password" />
+            </label>
+            <label class_="check"><input type_=`checkbox name="admin" checked=u.admin />"Has administrator rights"</label>
+            (elevation_field session)
+            (with_submit actions (submit "Save"))
+          </form> )
+
+let user_remove_view ~session ~(user : M.user option) ~id =
+  match admin_only session user with
+  | None -> missing "/users"
+  | Some u ->
+      ( "Delete " ^ u.name,
+        "/users",
+        fun actions ->
+          <form method_=`post action=(Routes.user_delete ~id ())>
+            <p>"The user, their applications, clients and messages are deleted."</p>
+            (elevation_field session)
+            (with_submit actions (submit ~class_:"button contained danger" "Delete"))
+          </form> )
+
+let app_edit ~session ~id ~alert () = dialog Page ~session ~alert (app_edit_view ~session ~id)
+let app_edit_dialog ~session ~id ~alert () = dialog Overlay ~session ~alert (app_edit_view ~session ~id)
+let app_remove ~session ~id ~alert () = dialog Page ~session ~alert (app_remove_view ~session ~id)
+let app_remove_dialog ~session ~id ~alert () = dialog Overlay ~session ~alert (app_remove_view ~session ~id)
+let app_token ~session ~id ~alert () = dialog Page ~session ~alert (app_token_view ~session ~id)
+let app_token_dialog ~session ~id ~alert () = dialog Overlay ~session ~alert (app_token_view ~session ~id)
+let client_edit ~session ~client ~id ~alert () = dialog Page ~session ~alert (client_edit_view ~client ~id)
+let client_edit_dialog ~session ~client ~id ~alert () = dialog Overlay ~session ~alert (client_edit_view ~client ~id)
+let client_remove ~session ~client ~id ~alert () = dialog Page ~session ~alert (client_remove_view ~session ~client ~id)
+
+let client_remove_dialog ~session ~client ~id ~alert () =
+  dialog Overlay ~session ~alert (client_remove_view ~session ~client ~id)
+
+let user_edit ~session ~user ~id ~alert () = dialog Page ~session ~alert (user_edit_view ~session ~user ~id)
+let user_edit_dialog ~session ~user ~id ~alert () = dialog Overlay ~session ~alert (user_edit_view ~session ~user ~id)
+let user_remove ~session ~user ~id ~alert () = dialog Page ~session ~alert (user_remove_view ~session ~user ~id)
+let user_remove_dialog ~session ~user ~id ~alert () = dialog Overlay ~session ~alert (user_remove_view ~session ~user ~id)
 
 let settings ~(session : Ui.session) ~alert () =
   Yuka.Server.page ~title:"Settings - Gotify" (fun () ->
@@ -272,6 +399,7 @@ let settings ~(session : Ui.session) ~alert () =
             <label class_="field">"New password"
               <input type_=`password name="pass" required=true autocomplete="new-password" />
             </label>
+            (elevation_field session)
             <button type_=`submit class_="button contained">"Change password"</button>
           </form>
         </div>

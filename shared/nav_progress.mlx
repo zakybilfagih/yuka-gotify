@@ -1,0 +1,22 @@
+(* The bar at the top of the window while a client navigation loads. It grows after a
+   short delay, so a fast navigation shows nothing, then fills and fades out once the new
+   page shows. The styles are .nav-progress in static/style.css. Being in the shell, it also
+   gives every signed-in page the client navigation of Yuka, which a page with
+   no island does not load: the dialogs of Routes.ml open as overlays only then. *)
+
+type phase = Idle | Loading | Finished
+
+let[@client] make () =
+  let phase = Yuka.State.make Idle in
+  (* Whether the bar grew for this navigation: one that ends before the delay goes back to
+     Idle instead of flashing a full bar. *)
+  let shown = ref false in
+  Yuka.Effect.after (fun () ->
+      if Yuka.State.get Yuka.Browser.navigating then begin
+        shown := false;
+        Yuka.State.set phase Loading
+      end
+      else Yuka.State.set phase (if !shown then Finished else Idle));
+  <div class_="nav-progress"
+    data_phase=(match Yuka.State.get phase with Idle -> "idle" | Loading -> "loading" | Finished -> "finished")
+    aria_hidden=true on_animationstart=(fun _ -> shown := true) />
