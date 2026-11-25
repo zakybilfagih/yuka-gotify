@@ -54,7 +54,9 @@ let shell ~(session : Ui.session) ~children () =
     <div class_="layout">
       <Yuka.Client>
         <Drawer apps=(List.map (fun (a : M.application) -> { Model.id = a.id; name = a.name }) session.apps)
-          image=(Static.url "defaultapp.png") />
+          image=(Static.url "defaultapp.png")>
+          <Yuka.Client><Notifications user=session.user.id icon=(Static.url "defaultapp.png") /></Yuka.Client>
+        </Drawer>
       </Yuka.Client>
       <main class_="content">children</main>
     </div>

@@ -1,0 +1,41 @@
+(* Desktop notifications of new messages while a Gotify tab is open, as
+   Gotify's web UI. While the browser has not asked, a button asks for the
+   permission. Once granted, Watch follows the newest messages of the user
+   and notifies each one newer than those it saw first. Watch mounts only in
+   the browser, so a server render does not load the feed. *)
+
+module Watch = struct
+  let make ~(user : int) ~(icon : string) () =
+    let live = Yuka.Live.make Topics.messages (fun () -> { Model.user; app = None; pages = 1 }) in
+    (* The newest id seen; None until the first state, which notifies nothing. *)
+    let seen = ref None in
+    Yuka.Effect.after (fun () ->
+        match Yuka.Status.data (Yuka.State.get (Yuka.Live.state live)) with
+        | None -> ()
+        | Some (page : Model.page) ->
+            let newest = List.fold_left (fun n (m : Model.message) -> Int.max n m.id) 0 page.messages in
+            (match !seen with
+            | None -> ()
+            | Some last ->
+                page.messages
+                |> List.filter (fun (m : Model.message) -> m.id > last)
+                |> List.rev
+                |> List.iter (fun (m : Model.message) ->
+                       !Platform.notify ~title:m.title ~body:(Markup.to_text m.body) ~icon));
+            seen := Some (Int.max newest (Option.value !seen ~default:0)));
+    Yuka.empty
+end
+
+let[@client] make ~(user : int) ~(icon : string) () =
+  (* "unsupported" in the server render, the browser's answer once started. *)
+  let permission = Yuka.State.make "unsupported" in
+  Yuka.Effect.after (fun () -> Yuka.State.set permission (!Platform.permission ()));
+  let enable _ = !Platform.request_permission (fun answer -> Yuka.State.set permission answer) in
+  <div class_="notifications">
+    (Yuka.hole (fun () ->
+       match Yuka.State.get permission with
+       | "default" ->
+           <button type_=`button class_="button text drawer-button" on_click=enable>"Enable notifications"</button>
+       | "granted" -> <Watch user icon />
+       | _ -> Yuka.empty))
+  </div>

@@ -28,3 +28,7 @@ let rec view : node -> _ Yuka.element = function
   | Text text -> Yuka.text text
   | Element { tag; attributes; children } ->
       Yuka.element tag (List.map (fun (name, value) -> Yuka.attr name value) attributes) (List.map view children)
+
+(** The text of the nodes, for a notification. *)
+let rec to_text nodes =
+  String.concat "" (List.map (function Text text -> text | Element { children; _ } -> to_text children) nodes)

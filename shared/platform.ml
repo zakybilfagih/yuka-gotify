@@ -12,3 +12,14 @@ let every : (int -> (unit -> unit) -> unit -> unit) ref = ref (fun _ _ () -> ())
 (** Copies the text to the clipboard; the promise of the browser decides,
     so the callback gets whether it worked. *)
 let copy : (string -> (bool -> unit) -> unit) ref = ref (fun _ k -> k false)
+
+(** The permission of the Notification API: ["default"], ["granted"],
+    ["denied"], or ["unsupported"] when the browser has none. *)
+let permission : (unit -> string) ref = ref (fun () -> "unsupported")
+
+(** Asks for the permission and gives the answer. *)
+let request_permission : ((string -> unit) -> unit) ref = ref (fun k -> k "unsupported")
+
+(** [notify ~title ~body ~icon] shows a desktop notification; a click on it
+    brings the tab to the front. *)
+let notify : (title:string -> body:string -> icon:string -> unit) ref = ref (fun ~title:_ ~body:_ ~icon:_ -> ())
