@@ -5,6 +5,9 @@ let now : unit -> float = [%mel.raw {|function () { return Date.now() / 1000 }|}
 let every : int -> (unit -> unit) -> unit -> unit =
   [%mel.raw {|function (ms, f) { var id = setInterval(function () { f() }, ms); return function () { clearInterval(id) } }|}]
 
+let after : int -> (unit -> unit) -> unit -> unit =
+  [%mel.raw {|function (ms, f) { var id = setTimeout(function () { f() }, ms); return function () { clearTimeout(id) } }|}]
+
 let copy : string -> (bool -> unit) -> unit =
   [%mel.raw
     {|function (text, k) { if (!navigator.clipboard) { k(false); return } navigator.clipboard.writeText(text).then(function () { k(true) }, function () { k(false) }) }|}]
@@ -26,5 +29,6 @@ let () =
   (Platform.notify := fun ~title ~body ~icon -> notify title body icon);
   Platform.now := now;
   Platform.every := every;
+  Platform.after := after;
   Platform.copy := copy;
   Yuka.render ~islands:Yuka_islands.registry ()

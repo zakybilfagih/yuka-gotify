@@ -23,3 +23,7 @@ let request_permission : ((string -> unit) -> unit) ref = ref (fun k -> k "unsup
 (** [notify ~title ~body ~icon] shows a desktop notification; a click on it
     brings the tab to the front. *)
 let notify : (title:string -> body:string -> icon:string -> unit) ref = ref (fun ~title:_ ~body:_ ~icon:_ -> ())
+
+(** [after ms f] calls [f] once, in [ms] milliseconds, and gives the
+    function that cancels it. *)
+let after : (int -> (unit -> unit) -> unit -> unit) ref = ref (fun _ _ () -> ())

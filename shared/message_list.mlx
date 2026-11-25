@@ -16,12 +16,22 @@ let trash =
         [];
     ]
 
+let undo_ms = 5000
+
 let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string) ~(image : string) () =
   let live = Yuka.Live.make Topics.messages (fun () -> feed) in
   let page () =
     Option.value (Yuka.Status.data (Yuka.State.get (Yuka.Live.state live))) ~default:initial
   in
-  let messages () = (page ()).messages in
+  (* Deleted messages wait [undo_ms] for an Undo before the server deletes
+     them: hidden at once, deleted when their timer ends or when the list goes
+     away, such as on a navigation to another page. *)
+  let pending = Yuka.State.make [] in
+  let timers : (int, unit -> unit) Hashtbl.t = Hashtbl.create 4 in
+  let messages () =
+    let hidden = Yuka.State.get pending in
+    List.filter (fun (m : Model.message) -> not (List.mem m.id hidden)) (page ()).messages
+  in
   (* The socket closed: Yuka reconnects by itself, with delays of up to 5 s,
      and gives up on a refused key. Retry loads the page again from the
      server, which also gives a new subscription, once the server answers:
@@ -60,14 +70,35 @@ let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string)
     | Ok (Error e) -> Yuka.State.set failure (Some (Yuka.Status.error_to_string e))
     | Error m -> Yuka.State.set failure (Some m)
   in
-  let delete (id : int) _ =
+  let commit (id : int) =
+    Hashtbl.remove timers id;
     Yuka.Async.on_result
       (Yuka.Live.optimistic live
          ~change:(fun (p : Model.page) ->
            { p with messages = List.filter (fun (m : Model.message) -> m.id <> id) p.messages })
          (fun () -> Yuka.Action.call Actions.delete_message id))
-      report
+      report;
+    Yuka.State.update pending (List.filter (( <> ) id))
   in
+  let delete (id : int) _ =
+    Yuka.State.update pending (fun ids -> id :: ids);
+    Hashtbl.replace timers id (!Platform.after undo_ms (fun () -> commit id))
+  in
+  let undo _ =
+    Hashtbl.iter (fun _ cancel -> cancel ()) timers;
+    Hashtbl.reset timers;
+    Yuka.State.set pending []
+  in
+  (* The list goes away: delete the waiting messages now. *)
+  Yuka.Effect.after
+    ~cleanup:(fun () ->
+      Hashtbl.iter
+        (fun id cancel ->
+          cancel ();
+          Yuka.Async.on_result (Yuka.Action.call Actions.delete_message id) ignore)
+        timers;
+      Hashtbl.reset timers)
+    (fun () -> ());
   let delete_all _ =
     if Yuka.Browser.confirm "Delete all messages?" then
       Yuka.Async.on_result
@@ -93,6 +124,15 @@ let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string)
             else "Lost the connection to the server. New messages show again once it is back."))
       </span>
       <button type_=`button class_="button text" on_click=retry>"Retry"</button>
+    </div>
+    <div class_="snackbar" role=`status hidden=(Yuka.State.get pending = [])>
+      <span>
+        (Yuka.text
+           (match List.length (Yuka.State.get pending) with
+            | 1 -> "Message deleted"
+            | n -> Int.to_string n ^ " messages deleted"))
+      </span>
+      <button type_=`button class_="button text" on_click=undo>"Undo"</button>
     </div>
     <p class_="error" role=`alert hidden=(Yuka.State.get failure = None)>
       (Yuka.text (Option.value (Yuka.State.get failure) ~default:""))
