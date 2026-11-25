@@ -265,6 +265,16 @@ let push req ({ app; title; message; priority } : App_shared.Actions.push) =
              Stream.publish s.user.id m;
              go (Routes.app_messages ~app ())))
 
+let elevate_client (s : Ui.session) id seconds =
+  let* c = own_client s id in
+  match c with
+  | None -> alert "/clients" "No such client"
+  | Some _ when seconds < 0 -> Lwt.return (Error [ (Some `Seconds, "Not a valid duration") ])
+  | Some c ->
+      let elevated_until = if seconds = 0 then None else Some (Unix.gettimeofday () +. float_of_int seconds) in
+      let* () = Db.update_client { c with elevated_until } in
+      go "/clients"
+
 let register () =
   let module A = App_shared.Actions in
   Yuka.Server.Form.implement A.confirm ~redirect:Fun.id (fun req { target; elevate_pass } ->
@@ -276,4 +286,6 @@ let register () =
           | User_delete id -> admin_only s (fun s -> user_delete s id)));
   Yuka.Server.Form.implement A.user_edit ~redirect:Fun.id (fun req (form : A.user_edit) ->
       elevated req form.elevate_pass (fun s -> admin_only s (fun _ -> user_update form)));
-  Yuka.Server.Form.implement A.push ~redirect:Fun.id push
+  Yuka.Server.Form.implement A.push ~redirect:Fun.id push;
+  Yuka.Server.Form.implement A.elevate ~redirect:Fun.id (fun req { id; seconds; elevate_pass } ->
+      elevated req elevate_pass (fun s -> elevate_client s id seconds))

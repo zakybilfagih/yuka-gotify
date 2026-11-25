@@ -166,7 +166,7 @@ let clients ~(session : Ui.session) ~(clients : M.client list) ~reveal ~alert ()
         </details>
         <div class_="card table-card">
           <table>
-            <thead><tr><th>"Name"</th><th>"Last used"</th><th>"Expires"</th><th>"Elevated"</th><th /></tr></thead>
+            <thead><tr><th>"Name"</th><th>"Last used"</th><th>"Expires"</th><th>"Elevation ends"</th><th /></tr></thead>
             <tbody>
               (Yuka.fragment
                  (List.map
@@ -177,9 +177,19 @@ let clients ~(session : Ui.session) ~(clients : M.client list) ~reveal ~alert ()
                           (if c.id = session.client.id then <span class_="chip">"this browser"</span> else Yuka.empty)
                         </td>
                         <td>(Yuka.text (Ui.date_opt c.last_used))</td>
-                        <td>(Yuka.text (match M.expires_at c with Some t -> Ui.date t | None -> "never"))</td>
-                        <td>(Yuka.text (if M.elevated ~now c then "until " ^ Ui.date_opt c.elevated_until else "no"))</td>
+                        <td>
+                          (match M.expires_at c with
+                           | Some t -> <Yuka.Client><Countdown until=t ended="expired" title=(Ui.date t) /></Yuka.Client>
+                           | None -> Yuka.text "never")
+                        </td>
+                        <td>
+                          (match c.elevated_until with
+                           | Some t when M.elevated ~now c ->
+                               <Yuka.Client><Countdown until=t ended="no" title=(Ui.date t) /></Yuka.Client>
+                           | _ -> Yuka.text "no")
+                        </td>
                         <td class_="actions">
+                          (link_button (Routes.client_elevate ~id:c.id ()) "Elevate")
                           (link_button (Routes.client_edit ~id:c.id ()) "Edit")
                           (link_button ~class_:"button text danger" (Routes.client_remove ~id:c.id ()) "Delete")
                         </td>
@@ -325,6 +335,18 @@ let client_remove_view ~(session : Ui.session) ~(client : M.client option) ~id =
             <Confirm_form target=(Actions.Target.to_string (Client_delete id)) text=(if c.id = session.client.id then "This is the client of this browser: deleting it signs you out."
                  else "Apps that use its token lose access.") button="Delete" danger=true user=(password_user session)>actions</Confirm_form>
           </Yuka.Client> )
+
+let client_elevate_view ~(session : Ui.session) ~(client : M.client option) ~id =
+  match client with
+  | None -> missing "/clients"
+  | Some c ->
+      ( "Elevate " ^ c.name,
+        "/clients",
+        fun actions ->
+          <Yuka.Client><Elevate_form id user=(password_user session)>actions</Elevate_form></Yuka.Client> )
+
+let client_elevate ~session ~client ~id ~alert () = dialog Page ~session ~alert (client_elevate_view ~session ~client ~id)
+let client_elevate_dialog ~session ~client ~id ~alert () = dialog Overlay ~session ~alert (client_elevate_view ~session ~client ~id)
 
 let admin_only (session : Ui.session) user = if session.user.admin then user else None
 

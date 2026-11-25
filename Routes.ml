@@ -35,6 +35,8 @@ let routes =
           Router.route Clients ~path:"/clients" ~page:Pages.clients ~loader:Loaders.clients ~search:{ reveal = optional string };
           Router.route Client_edit ~path:"/clients/:id<int>/edit" ~page:client_edit ?overlay:client_edit_dialog
             ~loader:Loaders.client;
+          Router.route Client_elevate ~path:"/clients/:id<int>/elevate" ~page:client_elevate ?overlay:client_elevate_dialog
+            ~loader:Loaders.client;
           Router.route Client_remove ~path:"/clients/:id<int>/delete" ~page:client_remove ?overlay:client_remove_dialog
             ~loader:Loaders.client;
           Router.route Users ~path:"/users" ~page:Pages.users ~loader:Loaders.users;

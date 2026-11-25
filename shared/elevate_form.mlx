@@ -1,0 +1,28 @@
+(* The form of the Elevate dialog of a client, as Confirm_form: the children
+   are the Cancel of the dialog. *)
+
+let[@client] make ~(id : int) ~(user : string option) ~children () =
+  <Yuka.Form action=Actions.elevate>
+    (fun form ->
+      <div>
+        <input type_=`hidden name="id" value=(Int.to_string id) />
+        <fieldset class_="choices">
+          <legend>"Elevate for"</legend>
+          (Yuka.fragment
+             (List.map
+                (fun (seconds, label) ->
+                  <label class_="check">
+                    <input type_=`radio name="seconds" value=(Int.to_string seconds) checked=(seconds = 3600) />
+                    (Yuka.text label)
+                  </label>)
+                Actions.durations))
+        </fieldset>
+        (Dialog_form.password form ~user)
+        (Dialog_form.errors form)
+        <div class_="dialog-actions">
+          children
+          (Yuka.hole (fun () ->
+             <button type_=`submit class_="button contained" disabled=(Yuka.State.get (Yuka.Form.pending form))>"Save"</button>))
+        </div>
+      </div>)
+  </Yuka.Form>

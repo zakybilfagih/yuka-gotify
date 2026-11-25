@@ -46,3 +46,12 @@ let user_edit = Yuka.Form.action ~name:"user_edit" ~fields:user_edit_form ~outpu
 type push = { app : int; title : string; message : string; priority : int } [@@deriving form]
 
 let push = Yuka.Form.action ~name:"push" ~fields:push_form ~output:Yuka.Codec.string
+
+(** Elevates a client of the user for [seconds], as POST /client/:id/elevate;
+    0 ends its elevation. *)
+type elevate = { id : int; seconds : int; elevate_pass : string option } [@@deriving form]
+
+let elevate = Yuka.Form.action ~name:"elevate" ~fields:elevate_form ~output:Yuka.Codec.string
+
+(** The choices of the Elevate dialog, as Gotify's web UI. *)
+let durations = [ (3600, "1 hour"); (86400, "1 day"); (30 * 86400, "30 days"); (365 * 86400, "1 year"); (0, "End the elevation") ]

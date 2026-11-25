@@ -1,0 +1,9 @@
+(* The time left until [until], "in 59 minutes", moving every second; [ended]
+   once it has passed. [title]: the full date, shown on hover. The server
+   renders the same text from its clock. *)
+
+let[@client] make ~(until : float) ~(ended : string) ~(title : string) () =
+  let now = Yuka.State.make (!Platform.now ()) in
+  Yuka.Effect.after ~cleanup:(fun stop -> stop ()) (fun () ->
+      !Platform.every 1000 (fun () -> Yuka.State.set now (!Platform.now ())));
+  <time title>(Yuka.text (Option.value (Time_ago.until ~now:(Yuka.State.get now) until) ~default:ended))</time>
