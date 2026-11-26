@@ -70,7 +70,33 @@ let rec block defs ~tight (node : Block.t) : Markup.node list =
       [ element "pre" [ element "code" [ Text text ] ] ]
   | Block.Html_block (lines, _) -> [ element "p" [ Text (String.concat "\n" (List.map Block_line.to_string lines)) ] ]
   | Block.Thematic_break _ -> [ element "hr" [] ]
+  | Block.Ext_table (table, _) -> [ element "div" ~attributes:[ ("class", "table-scroll") ] [ table_element defs table ] ]
   | _ -> []
+
+(* A GFM table: its header rows in thead, its data rows in tbody, each row padded to the
+   column count, and each cell aligned by the separator row. *)
+and table_element defs table =
+  let rows = List.map (fun ((row, _), _) -> row) (Block.Table.rows table) in
+  let aligns = List.find_map (function `Sep seps -> Some (List.map (fun ((align, _), _) -> align) seps) | _ -> None) rows in
+  let align i = match Option.bind aligns (fun a -> List.nth_opt a i) with Some (Some a) -> Some a | _ -> None in
+  let row tag cells =
+    let cells = List.map (fun (cell, _) -> inline defs cell) cells in
+    let cells = cells @ List.init (max 0 (Block.Table.col_count table - List.length cells)) (fun _ -> []) in
+    let cell i children =
+      let attributes =
+        match align i with
+        | Some `Left -> [ ("style", "text-align: left") ]
+        | Some `Center -> [ ("style", "text-align: center") ]
+        | Some `Right -> [ ("style", "text-align: right") ]
+        | None -> []
+      in
+      element tag ~attributes children
+    in
+    element "tr" (List.mapi cell cells)
+  in
+  let head = List.filter_map (function `Header cells -> Some (row "th" cells) | _ -> None) rows in
+  let body = List.filter_map (function `Data cells -> Some (row "td" cells) | _ -> None) rows in
+  element "table" ((if head = [] then [] else [ element "thead" head ]) @ if body = [] then [] else [ element "tbody" body ])
 
 let rec join = function
   | Markup.Text "" :: rest -> join rest
