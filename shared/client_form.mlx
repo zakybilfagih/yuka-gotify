@@ -6,7 +6,7 @@ let[@client] make ~(id : int option) ~(name : string) ~(expires : int) ~(label :
       <div class_="stack-plain">
         (match id with Some id -> <input type_=`hidden name="id" value=(Int.to_string id) /> | None -> Yuka.empty)
         <label class_="field">"Name"
-          <input name="name" value=(Dialog_form.sent form `Name name) required=true autocomplete="off" autofocus=(id <> None) />
+          <input name="name" value=(Dialog_form.sent form `Name name) required=true autocomplete="off" autofocus=true />
           (Dialog_form.error form `Name)
         </label>
         <label class_="field">"Expire after inactivity (seconds, 0 = never)"

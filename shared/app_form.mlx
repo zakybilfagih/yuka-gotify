@@ -1,5 +1,4 @@
-(* Create or edit an application ([id]). The children are the Cancel of an
-   edit dialog, or nothing for the create form. *)
+(* Create or edit an application ([id]), in a dialog. The children are its Cancel. *)
 
 let[@client] make ~(id : int option) ~(name : string) ~(description : string) ~(priority : int) ~(label : string)
     ~children () =
@@ -8,7 +7,7 @@ let[@client] make ~(id : int option) ~(name : string) ~(description : string) ~(
       <div class_="stack-plain">
         (match id with Some id -> <input type_=`hidden name="id" value=(Int.to_string id) /> | None -> Yuka.empty)
         <label class_="field">"Name"
-          <input name="name" value=(Dialog_form.sent form `Name name) required=true autocomplete="off" autofocus=(id <> None) />
+          <input name="name" value=(Dialog_form.sent form `Name name) required=true autocomplete="off" autofocus=true />
           (Dialog_form.error form `Name)
         </label>
         <label class_="field">"Short description"

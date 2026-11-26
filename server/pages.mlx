@@ -86,15 +86,10 @@ let applications ~(session : Ui.session) ~reveal ~alert () =
       <section>
         <header class_="page-header">
           <h1>"Applications"</h1>
+          (link_button ~class_:"button contained" (Routes.app_new ()) "Create application")
         </header>
         (alert_view alert)
         (token_reveal ~kind:"Application" (Ui.revealed session reveal))
-        <details class_="create">
-          <summary class_="button contained">"Create application"</summary>
-          <div class_="stack">
-            <Yuka.Client><App_form id=None name="" description="" priority=0 label="Create">Yuka.empty</App_form></Yuka.Client>
-          </div>
-        </details>
         <div class_="card table-card">
           <Yuka.Client>
             <App_table
@@ -115,15 +110,12 @@ let clients ~(session : Ui.session) ~(clients : M.client list) ~reveal ~alert ()
   Yuka.Server.page ~title:"Clients - Gotify" (fun () ->
       let now = Unix.gettimeofday () in
       <section>
-        <header class_="page-header"><h1>"Clients"</h1></header>
+        <header class_="page-header">
+          <h1>"Clients"</h1>
+          (link_button ~class_:"button contained" (Routes.client_new ()) "Create client")
+        </header>
         (alert_view alert)
         (token_reveal ~kind:"Client" (Ui.revealed session reveal))
-        <details class_="create">
-          <summary class_="button contained">"Create client"</summary>
-          <div class_="stack">
-            <Yuka.Client><Client_form id=None name="" expires=0 label="Create">Yuka.empty</Client_form></Yuka.Client>
-          </div>
-        </details>
         <div class_="card table-card">
           <table>
             <thead>
@@ -171,14 +163,11 @@ let users ~(session : Ui.session) ~(users : M.user list) ~alert () =
       if not session.user.admin then <section><h1>"Users"</h1><p class_="alert">"Admins only."</p></section>
       else
         <section>
-          <header class_="page-header"><h1>"Users"</h1></header>
+          <header class_="page-header">
+            <h1>"Users"</h1>
+            (link_button ~class_:"button contained" (Routes.user_new ()) "Create user")
+          </header>
           (alert_view alert)
-          <details class_="create">
-            <summary class_="button contained">"Create user"</summary>
-            <div class_="stack">
-              <Yuka.Client><User_create_form user=(password_user session) /></Yuka.Client>
-            </div>
-          </details>
           <div class_="card table-card">
             <table>
               <thead>
@@ -237,6 +226,12 @@ let missing back =
 
 let find_app (session : Ui.session) id = List.find_opt (fun (a : M.application) -> a.id = id) session.apps
 
+let app_new_view =
+  ( "Create application",
+    "/applications",
+    fun actions ->
+      <Yuka.Client><App_form id=None name="" description="" priority=0 label="Create">actions</App_form></Yuka.Client> )
+
 let app_edit_view ~session ~id =
   match find_app session id with
   | None -> missing "/applications"
@@ -281,6 +276,11 @@ let app_image_remove_view ~(session : Ui.session) ~id =
             <Confirm_form target=(Actions.Target.to_string (App_image_delete id)) text="The application gets the default image again." button="Delete" danger=true user=None>actions</Confirm_form>
           </Yuka.Client> )
 
+let client_new_view =
+  ( "Create client",
+    "/clients",
+    fun actions -> <Yuka.Client><Client_form id=None name="" expires=0 label="Create">actions</Client_form></Yuka.Client> )
+
 let client_edit_view ~(client : M.client option) ~id =
   match client with
   | None -> missing "/clients"
@@ -318,6 +318,13 @@ let client_elevate_dialog ~session ~client ~id ~alert () = dialog Overlay ~sessi
 
 let admin_only (session : Ui.session) user = if session.user.admin then user else None
 
+let user_new_view ~(session : Ui.session) =
+  if not session.user.admin then missing "/users"
+  else
+    ( "Create user",
+      "/users",
+      fun actions -> <Yuka.Client><User_create_form user=(password_user session)>actions</User_create_form></Yuka.Client> )
+
 let user_edit_view ~session ~(user : M.user option) ~id =
   match admin_only session user with
   | None -> missing "/users"
@@ -354,6 +361,12 @@ let app_push_view ~(session : Ui.session) ~app =
 
 let app_push ~session ~app ~alert () = dialog Page ~session ~alert (app_push_view ~session ~app)
 let app_push_dialog ~session ~app ~alert () = dialog Overlay ~session ~alert (app_push_view ~session ~app)
+let app_new ~session ~alert () = dialog Page ~session ~alert app_new_view
+let app_new_dialog ~session ~alert () = dialog Overlay ~session ~alert app_new_view
+let client_new ~session ~alert () = dialog Page ~session ~alert client_new_view
+let client_new_dialog ~session ~alert () = dialog Overlay ~session ~alert client_new_view
+let user_new ~session ~alert () = dialog Page ~session ~alert (user_new_view ~session)
+let user_new_dialog ~session ~alert () = dialog Overlay ~session ~alert (user_new_view ~session)
 let app_edit ~session ~id ~alert () = dialog Page ~session ~alert (app_edit_view ~session ~id)
 let app_edit_dialog ~session ~id ~alert () = dialog Overlay ~session ~alert (app_edit_view ~session ~id)
 let app_remove ~session ~id ~alert () = dialog Page ~session ~alert (app_remove_view ~session ~id)

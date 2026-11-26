@@ -194,7 +194,6 @@ body {
   padding: 6px 16px; border-radius: 4px; border: 0; cursor: pointer;
   background: none; color: var(--primary); text-decoration: none; list-style: none;
 }
-.button::-webkit-details-marker { display: none; }
 .button.contained { background: var(--primary); color: var(--paper); box-shadow: var(--shadow); }
 .theme-light .button.contained, .theme-system .button.contained { color: #fff; }
 .button.contained:hover { background: var(--primary-dark); }
@@ -233,10 +232,6 @@ td.actions { width: 1%; padding-left: 0; padding-right: 8px; }
 .error { color: var(--danger); }
 .muted { color: var(--muted); font-size: 14px; }
 
-/* Create / edit / confirm panels (details elements, no JavaScript) */
-details.create { margin-bottom: 24px; }
-details.create > form { margin-top: 16px; max-width: 480px; background: var(--paper); border-radius: 4px; box-shadow: var(--shadow); }
-details.create > summary { display: inline-flex; }
 
 /* Dialogs: an overlay over the list after a click, else a page of their own */
 .app.overlay {

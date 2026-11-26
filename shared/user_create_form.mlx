@@ -1,11 +1,11 @@
-(* The Create user form of the Users page. [user]: as Confirm_form. *)
+(* The form of the Create user dialog. [user]: as Confirm_form. The children are its Cancel. *)
 
-let[@client] make ~(user : string option) () =
+let[@client] make ~(user : string option) ~children () =
   <Yuka.Form action=Actions.user_create>
     (fun form ->
       <div class_="stack-plain">
         <label class_="field">"Name"
-          <input name="name" value=(Dialog_form.sent form `Name "") required=true autocomplete="off" />
+          <input name="name" value=(Dialog_form.sent form `Name "") required=true autocomplete="off" autofocus=true />
           (Dialog_form.error form `Name)
         </label>
         <label class_="field">"Password"
@@ -15,6 +15,6 @@ let[@client] make ~(user : string option) () =
         <label class_="check"><input type_=`checkbox name="admin" />"Has administrator rights"</label>
         (Dialog_form.password form ~user)
         (Dialog_form.errors form)
-        <div class_="dialog-actions">(Dialog_form.submit form "Create")</div>
+        <div class_="dialog-actions">children (Dialog_form.submit form "Create")</div>
       </div>)
   </Yuka.Form>
