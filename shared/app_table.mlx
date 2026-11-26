@@ -27,6 +27,11 @@ let index_of id ids =
   let rec go i = function [] -> 0 | x :: rest -> if x = id then i else go (i + 1) rest in
   go 0 ids
 
+(* The handle moved with the keyboard, to focus again in the table of the page that the move
+   loads: Yuka keeps the focus by id on a refresh, but the handles there are hidden until the
+   island starts. *)
+let refocus = ref None
+
 let[@client] make ~(apps : Model.app_row list) ~(image : string) () =
   let saved = List.map (fun (a : Model.app_row) -> a.id) apps in
   let order = Yuka.State.make saved in
@@ -37,6 +42,8 @@ let[@client] make ~(apps : Model.app_row list) ~(image : string) () =
   let failure = Yuka.State.make None in
   Yuka.Effect.after (fun () ->
       Yuka.State.set started true;
+      Option.iter (fun id -> Yuka.Browser.focus (handle_id id)) !refocus;
+      refocus := None;
       Yuka.Browser.on_window "pointerup" (fun _ -> if Yuka.State.peek dragging = None then Yuka.State.set armed None));
   let rows () =
     List.filter_map (fun id -> List.find_opt (fun (a : Model.app_row) -> a.id = id) apps) (Yuka.State.get order)
@@ -47,9 +54,11 @@ let[@client] make ~(apps : Model.app_row list) ~(image : string) () =
       Yuka.Async.on_result (Yuka.Action.call Actions.reorder_apps ids) (function
         | Ok (Ok ()) -> Yuka.Browser.refresh ()
         | Ok (Error e) ->
+            refocus := None;
             Yuka.State.set order saved;
             Yuka.State.set failure (Some (Yuka.Status.error_to_string e))
         | Error m ->
+            refocus := None;
             Yuka.State.set order saved;
             Yuka.State.set failure (Some m))
   in
@@ -61,6 +70,7 @@ let[@client] make ~(apps : Model.app_row list) ~(image : string) () =
         Yuka.Event.prevent_default event;
         Yuka.State.update order (fun ids -> place ids id (index_of id ids + by));
         Yuka.Browser.focus (handle_id id);
+        if Yuka.State.peek order <> saved then refocus := Some id;
         save ()
   in
   let over id event =
