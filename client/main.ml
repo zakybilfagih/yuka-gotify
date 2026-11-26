@@ -32,7 +32,26 @@ let notify : string -> string -> string -> unit =
   [%mel.raw
     {|function (title, body, icon) { if (typeof Notification === "undefined" || Notification.permission !== "granted") return; var n = new Notification(title, { body: body, icon: icon }); n.onclick = function () { window.focus(); n.close() } }|}]
 
+(* Yuka runs every client navigation in a view transition (~transitions:true). This skips the
+   animation, though not the update, when a dialog opens or closes (an overlay route, its
+   .overlay is in the page before or after) and when the theme changes (Theme_form refreshes
+   the page, and the shell's .app gets another class). *)
+let skip_some_transitions : unit -> unit =
+  [%mel.raw
+    {|function () {
+  if (typeof document.startViewTransition !== "function") return;
+  var start = document.startViewTransition.bind(document);
+  var look = function () { var app = document.querySelector(".app:not(.overlay)"); return { overlay: !!document.querySelector(".overlay"), theme: app ? app.className : "" } };
+  document.startViewTransition = function (update) {
+    var before = look();
+    var t = start(update);
+    t.updateCallbackDone.then(function () { var after = look(); if (before.overlay || after.overlay || before.theme !== after.theme) t.skipTransition() }, function () {});
+    return t;
+  };
+}|}]
+
 let () =
+  skip_some_transitions ();
   Platform.permission := permission;
   Platform.request_permission := request_permission;
   (Platform.notify := fun ~title ~body ~icon -> notify title body icon);
@@ -44,4 +63,4 @@ let () =
   Platform.scroll_to_top := scroll_to_top;
   Platform.start_drag := start_drag;
   Platform.copy := copy;
-  Yuka.render ~islands:Yuka_islands.registry ()
+  Yuka.render ~islands:Yuka_islands.registry ~transitions:true ()

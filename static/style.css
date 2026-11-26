@@ -302,3 +302,22 @@ td.order { width: 1%; padding-right: 0; white-space: nowrap; }
 .move-forms { display: inline-flex; }
 .move-forms form { display: inline; }
 tr.dragging { opacity: .5; background: var(--hover); }
+
+/* Page changes inside a view transition (Yuka.render ~transitions:true): the app bar and drawer
+   switch at once, and only the content fades and slides, from the right for a push and the
+   left for back. Browsers without view transitions, and pages without JS, just swap. */
+.appbar { view-transition-name: appbar; }
+.drawer { view-transition-name: drawer; }
+.content { view-transition-name: content; }
+::view-transition-old(root), ::view-transition-old(appbar), ::view-transition-old(drawer) { display: none; }
+::view-transition-new(root), ::view-transition-new(appbar), ::view-transition-new(drawer) { animation: none; }
+::view-transition-group(content) { animation-duration: 220ms; }
+::view-transition-old(content) { animation: vtOut 120ms ease-in both; }
+::view-transition-new(content) { animation: vtIn 220ms cubic-bezier(0.2, 0, 0, 1) 60ms both; }
+[data-yuka-nav="back"]::view-transition-new(content) { animation-name: vtInBack; }
+@keyframes vtOut { to { opacity: 0; } }
+@keyframes vtIn { from { opacity: 0; transform: translateX(16px); } }
+@keyframes vtInBack { from { opacity: 0; transform: translateX(-16px); } }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
