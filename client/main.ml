@@ -11,6 +11,11 @@ let after : int -> (unit -> unit) -> unit -> unit =
 let overflows : string -> bool =
   [%mel.raw {|function (id) { var e = document.getElementById(id); return !!e && e.scrollHeight > e.clientHeight + 1 }|}]
 
+(* Image loads do not bubble, so this listens in the capture phase. *)
+let on_image_load : (unit -> unit) -> unit -> unit =
+  [%mel.raw
+    {|function (f) { var h = function (e) { if (e.target && e.target.tagName === "IMG") f() }; document.addEventListener("load", h, true); return function () { document.removeEventListener("load", h, true) } }|}]
+
 let scroll_y : unit -> float = [%mel.raw {|function () { return window.scrollY }|}]
 let scroll_to_top : unit -> unit = [%mel.raw {|function () { window.scrollTo({ top: 0, behavior: "smooth" }) }|}]
 
@@ -67,6 +72,7 @@ let () =
   Platform.every := every;
   Platform.after := after;
   Platform.overflows := overflows;
+  Platform.on_image_load := on_image_load;
   Platform.scroll_y := scroll_y;
   Platform.scroll_to_top := scroll_to_top;
   Platform.start_drag := start_drag;

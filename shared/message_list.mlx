@@ -74,7 +74,8 @@ let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string)
   (* Read more: once the island runs, a long body is cut at the height of
      .message-body.collapsed, with a button to show it all. Without
      JavaScript every body shows in full. [overflowing]: the ids whose body
-     is cut, measured after each change of the list and on a resize. *)
+     is cut, measured after each change of the list, on a resize, and when an image loads (a
+     lazy image is 0 px tall until then). *)
   let started = Yuka.State.make false in
   let expanded = Yuka.State.make [] in
   let overflowing = Yuka.State.make [] in
@@ -89,6 +90,7 @@ let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string)
   Yuka.Effect.after (fun () -> Yuka.State.set started true);
   Yuka.Effect.after (fun () -> if Yuka.State.get started then measure ());
   Yuka.Effect.after (fun () -> Yuka.Browser.on_window "resize" (fun _ -> measure ()));
+  Yuka.Effect.after ~cleanup:(fun stop -> stop ()) (fun () -> !Platform.on_image_load (fun () -> measure ()));
   let toggle id _ =
     Yuka.State.update expanded (fun ids -> if List.mem id ids then List.filter (( <> ) id) ids else id :: ids)
   in
