@@ -33,19 +33,27 @@ let notify : string -> string -> string -> unit =
     {|function (title, body, icon) { if (typeof Notification === "undefined" || Notification.permission !== "granted") return; var n = new Notification(title, { body: body, icon: icon }); n.onclick = function () { window.focus(); n.close() } }|}]
 
 (* Yuka runs every client navigation in a view transition (~transitions:true). This skips the
-   animation, though not the update, when a dialog opens or closes (an overlay route, its
-   .overlay is in the page before or after) and when the theme changes (Theme_form refreshes
-   the page, and the shell's .app gets another class). *)
+   animation, though not the update, when a dialog opens or closes (an overlay route: .overlay
+   is in the page before or after) and when the path stays the same: a refresh (theme change,
+   reordered apps) or a change of query only (infinite scroll's ?pages=N). Yuka has changed the
+   URL before it starts the transition, so [shown] keeps the path of the page on screen: set
+   after an update that leaves no dialog, and left as it is when a dialog closes (Yuka hides it
+   without a transition) or opens over the page. *)
 let skip_some_transitions : unit -> unit =
   [%mel.raw
     {|function () {
   if (typeof document.startViewTransition !== "function") return;
   var start = document.startViewTransition.bind(document);
-  var look = function () { var app = document.querySelector(".app:not(.overlay)"); return { overlay: !!document.querySelector(".overlay"), theme: app ? app.className : "" } };
+  var shown = location.pathname;
+  var overlay = function () { return !!document.querySelector(".overlay") };
   document.startViewTransition = function (update) {
-    var before = look();
+    var from = shown, before = overlay();
     var t = start(update);
-    t.updateCallbackDone.then(function () { var after = look(); if (before.overlay || after.overlay || before.theme !== after.theme) t.skipTransition() }, function () {});
+    t.updateCallbackDone.then(function () {
+      var after = overlay(), path = location.pathname;
+      if (!after) shown = path;
+      if (before || after || from === path) t.skipTransition();
+    }, function () {});
     return t;
   };
 }|}]
