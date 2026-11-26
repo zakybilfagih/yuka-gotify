@@ -1,10 +1,27 @@
-(* The session of every signed-in page, else the login page. *)
+(* The session of every signed-in page, else the login page. The shell
+   layout takes it, and a client navigation keeps the layout (and so opens a
+   dialog as an overlay) only while it is the same: so it holds no time of
+   last use, of the client (moved on every 5 minutes) nor of the apps (moved
+   on by each push), which the layout does not show. The Applications page
+   loads the apps with theirs ([apps]). *)
 let session req =
   Yuka.Async.map
     (function
-      | Some s -> Ok s
+      | Some (s : Ui.session) ->
+          Ok
+            {
+              s with
+              client = { s.client with last_used = None };
+              apps = List.map (fun (a : Gotify_core.Model.application) -> { a with last_used = None }) s.apps;
+            }
       | None -> Error (Yuka.Server.Redirect { location = "/login"; kind = `See_other }))
     (Yuka_server.to_async (Ui.find req))
+
+(* The user's applications as they are now, with their time of last use. *)
+let apps req =
+  Yuka.Async.bind (session req) (function
+    | Error _ as e -> Yuka.Async.return e
+    | Ok (s : Ui.session) -> Yuka.Async.map Result.ok (Yuka_server.to_async (Gotify_core.Db.apps_of_user s.user.id)))
 
 let clients req =
   Yuka.Async.bind (session req) (function

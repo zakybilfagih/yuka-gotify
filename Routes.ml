@@ -29,7 +29,8 @@ let routes =
           Router.route App_messages_remove ~path:"/messages/:app<int>/delete" ~page:app_messages_remove
             ?overlay:app_messages_remove_dialog;
           Router.route App_push ~path:"/messages/:app<int>/push" ~page:app_push ?overlay:app_push_dialog;
-          Router.route Applications ~path:"/applications" ~page:applications ~search:{ reveal = optional string };
+          Router.route Applications ~path:"/applications" ~page:applications ~loader:Loaders.apps
+            ~search:{ reveal = optional string };
           Router.route App_new ~path:"/applications/new" ~page:app_new ?overlay:app_new_dialog;
           Router.route App_edit ~path:"/applications/:id<int>/edit" ~page:app_edit ?overlay:app_edit_dialog;
           Router.route App_remove ~path:"/applications/:id<int>/delete" ~page:app_remove ?overlay:app_remove_dialog;

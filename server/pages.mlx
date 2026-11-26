@@ -81,7 +81,7 @@ let token_reveal ~kind = function
         </div>
       </section>
 
-let applications ~(session : Ui.session) ~reveal ~alert () =
+let applications ~(session : Ui.session) ~(apps : M.application list) ~reveal ~alert () =
   Yuka.Server.page ~title:"Applications - Gotify" (fun () ->
       <section>
         <header class_="page-header">
@@ -100,9 +100,9 @@ let applications ~(session : Ui.session) ~reveal ~alert () =
                           last_used_title = (match a.last_used with Some t -> Ui.date t | None -> "");
                           created = Ui.day a.created_at; created_title = Ui.date a.created_at;
                           image = Static.app_image a; custom_image = a.image <> "" })
-                      session.apps) />
+                      apps) />
           </Yuka.Client>
-          (if session.apps = [] then <p class_="empty">"No applications"</p> else Yuka.empty)
+          (if apps = [] then <p class_="empty">"No applications"</p> else Yuka.empty)
         </div>
       </section>)
 
