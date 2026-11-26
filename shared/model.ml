@@ -29,8 +29,10 @@ type app_row = {
   name : string;
   description : string;
   priority : int;
-  last_used : string;
-  created : string;
+  last_used : string;  (** "Never", "Recently" or "2 hours ago" *)
+  last_used_title : string;  (** the full date, or "" when never used *)
+  created : string;  (** the day *)
+  created_title : string;  (** the full date *)
   image : string;  (** the URL of the app's image *)
   custom_image : bool;  (** an uploaded image, which can be deleted *)
 }

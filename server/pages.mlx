@@ -101,7 +101,9 @@ let applications ~(session : Ui.session) ~reveal ~alert () =
               apps=(List.map
                       (fun (a : M.application) ->
                         { Model.id = a.id; name = a.name; description = a.description; priority = a.default_priority;
-                          last_used = Ui.date_opt a.last_used; created = Ui.date a.created_at;
+                          last_used = Ui.last_used a.last_used;
+                          last_used_title = (match a.last_used with Some t -> Ui.date t | None -> "");
+                          created = Ui.day a.created_at; created_title = Ui.date a.created_at;
                           image = Static.app_image a; custom_image = a.image <> "" })
                       session.apps) />
           </Yuka.Client>
@@ -124,7 +126,12 @@ let clients ~(session : Ui.session) ~(clients : M.client list) ~reveal ~alert ()
         </details>
         <div class_="card table-card">
           <table>
-            <thead><tr><th>"Name"</th><th>"Last used"</th><th>"Created"</th><th>"Expires"</th><th>"Elevation ends"</th><th /></tr></thead>
+            <thead>
+              <tr>
+                <th>"Name"</th><th>"Last used"</th><th>"Created"</th><th>"Expires"</th><th>"Elevation ends"</th>
+                <th><span class_="visually-hidden">"Actions"</span></th>
+              </tr>
+            </thead>
             <tbody>
               (Yuka.fragment
                  (List.map
@@ -134,8 +141,8 @@ let clients ~(session : Ui.session) ~(clients : M.client list) ~reveal ~alert ()
                           (Yuka.text c.name)
                           (if c.id = session.client.id then <span class_="chip">"this browser"</span> else Yuka.empty)
                         </td>
-                        <td><time>(Yuka.text (Ui.date_opt c.last_used))</time></td>
-                        <td><time>(Yuka.text (Ui.date c.created_at))</time></td>
+                        <td><time title=(Option.fold ~none:"" ~some:Ui.date c.last_used)>(Yuka.text (Ui.last_used c.last_used))</time></td>
+                        <td><time title=(Ui.date c.created_at)>(Yuka.text (Ui.day c.created_at))</time></td>
                         <td>
                           (match M.expires_at c with
                            | Some t -> <Yuka.Client><Countdown until=t ended="expired" title=(Ui.date t) /></Yuka.Client>
@@ -148,9 +155,9 @@ let clients ~(session : Ui.session) ~(clients : M.client list) ~reveal ~alert ()
                            | _ -> Yuka.text "no")
                         </td>
                         <td class_="actions">
-                          (link_button (Routes.client_elevate ~id:c.id ()) "Elevate")
-                          (link_button (Routes.client_edit ~id:c.id ()) "Edit")
-                          (link_button ~class_:"button text danger" (Routes.client_remove ~id:c.id ()) "Delete")
+                          (Icons.link ~href:(Routes.client_elevate ~id:c.id ()) ~label:("Elevate " ^ c.name) Icons.security)
+                          (Icons.link ~href:(Routes.client_edit ~id:c.id ()) ~label:("Edit " ^ c.name) Icons.edit)
+                          (Icons.link ~href:(Routes.client_remove ~id:c.id ()) ~label:("Delete " ^ c.name) Icons.delete)
                         </td>
                       </tr>)
                     clients))
@@ -174,7 +181,9 @@ let users ~(session : Ui.session) ~(users : M.user list) ~alert () =
           </details>
           <div class_="card table-card">
             <table>
-              <thead><tr><th>"Name"</th><th>"Admin"</th><th>"Created"</th><th /></tr></thead>
+              <thead>
+                <tr><th>"Name"</th><th>"Admin"</th><th>"Created"</th><th><span class_="visually-hidden">"Actions"</span></th></tr>
+              </thead>
               <tbody>
                 (Yuka.fragment
                    (List.map
@@ -182,10 +191,10 @@ let users ~(session : Ui.session) ~(users : M.user list) ~alert () =
                         <tr>
                           <td>(Yuka.text u.name)</td>
                           <td>(Yuka.text (if u.admin then "Yes" else "No"))</td>
-                          <td><time>(Yuka.text (Ui.date u.created_at))</time></td>
+                          <td><time title=(Ui.date u.created_at)>(Yuka.text (Ui.day u.created_at))</time></td>
                           <td class_="actions">
-                            (link_button (Routes.user_edit ~id:u.id ()) "Edit")
-                            (link_button ~class_:"button text danger" (Routes.user_remove ~id:u.id ()) "Delete")
+                            (Icons.link ~href:(Routes.user_edit ~id:u.id ()) ~label:("Edit " ^ u.name) Icons.edit)
+                            (Icons.link ~href:(Routes.user_remove ~id:u.id ()) ~label:("Delete " ^ u.name) Icons.delete)
                           </td>
                         </tr>)
                       users))

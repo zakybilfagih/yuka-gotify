@@ -208,6 +208,9 @@ body {
   color: var(--muted); padding: 4px; border-radius: 50%;
 }
 .icon-button:hover { background: var(--hover); }
+/* Icon links in table rows (shared/icons.mlx): grey like Gotify's, not the accent color of links */
+.app a.icon-button { color: var(--muted); padding: 8px; }
+td.actions { width: 1%; padding-left: 0; padding-right: 8px; }
 
 /* Forms */
 .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }

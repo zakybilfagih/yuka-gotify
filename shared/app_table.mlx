@@ -6,10 +6,7 @@
    image (picking a file posts it at once; without JavaScript, the Upload
    button does), and a click on an uploaded image opens its delete dialog. *)
 
-let icon d =
-  Yuka.element "svg"
-    [ Yuka.attr "viewBox" "0 0 24 24"; Yuka.attr "width" "20"; Yuka.attr "height" "20"; Yuka.attr "aria-hidden" "true" ]
-    [ Yuka.element "path" [ Yuka.attr "fill" "currentColor"; Yuka.attr "d" d ] [] ]
+let icon = Icons.svg
 
 let handle_icon =
   icon
@@ -111,7 +108,7 @@ let[@client] make ~(apps : Model.app_row list) () =
       <thead>
         <tr>
           <th><span class_="visually-hidden">"Order"</span></th>
-          <th>"Image"</th><th>"Name"</th><th>"Description"</th><th>"Priority"</th><th>"Last used"</th><th>"Created"</th><th>"Token"</th><th />
+          <th>"Image"</th><th>"Name"</th><th>"Description"</th><th>"Priority"</th><th>"Last used"</th><th>"Created"</th><th><span class_="visually-hidden">"Actions"</span></th>
         </tr>
       </thead>
       <tbody>
@@ -162,12 +159,12 @@ let[@client] make ~(apps : Model.app_row list) () =
                <td><span class_="name-cell">(Yuka.text a.name)</span></td>
                <td>(Yuka.text a.description)</td>
                <td>(Yuka.int a.priority)</td>
-               <td><time>(Yuka.text a.last_used)</time></td>
-               <td><time>(Yuka.text a.created)</time></td>
-               <td><a class_="button text" href=(Routes.app_token ~id:a.id ())>"New token"</a></td>
+               <td><time title=a.last_used_title>(Yuka.text a.last_used)</time></td>
+               <td><time title=a.created_title>(Yuka.text a.created)</time></td>
                <td class_="actions">
-                 <a class_="button text" href=(Routes.app_edit ~id:a.id ())>"Edit"</a>
-                 <a class_="button text danger" href=(Routes.app_remove ~id:a.id ())>"Delete"</a>
+                 (Icons.link ~href:(Routes.app_token ~id:a.id ()) ~label:("New token for " ^ a.name) Icons.key)
+                 (Icons.link ~href:(Routes.app_edit ~id:a.id ()) ~label:("Edit " ^ a.name) Icons.edit)
+                 (Icons.link ~href:(Routes.app_remove ~id:a.id ()) ~label:("Delete " ^ a.name) Icons.delete)
                </td>
              </tr>))
       </tbody>

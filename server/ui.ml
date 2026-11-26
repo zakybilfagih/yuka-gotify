@@ -131,4 +131,12 @@ let date t =
   let tm = Unix.gmtime t in
   Printf.sprintf "%04d-%02d-%02d %02d:%02d UTC" (tm.tm_year + 1900) (tm.tm_mon + 1) tm.tm_mday tm.tm_hour tm.tm_min
 
-let date_opt = function Some t -> date t | None -> "never"
+(** The day of [t], as the tables of Gotify's web UI show it ("2026-11-26"); the full [date] goes in a title. *)
+let day t = String.sub (date t) 0 10
+
+(** When a token was last used, as Gotify's web UI says it: "Never", "Recently" (within 5 minutes), or "2 hours ago". *)
+let last_used = function
+  | None -> "Never"
+  | Some t ->
+      let now = Unix.gettimeofday () in
+      if now -. t < 300. then "Recently" else App_shared.Time_ago.text ~now t
