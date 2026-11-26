@@ -1,5 +1,5 @@
-(* The REST API of Gotify 3.1.1 (router/router.go), minus plugins and
-   OIDC. [dispatch] answers a request whose path is one of Gotify's and
+(* The REST API of Gotify 3.1.1 (router/router.go), minus plugins (GET /plugin
+   answers an empty list) and OIDC. [dispatch] answers a request whose path is one of Gotify's and
    returns true; any other path is left to the Yuka app. *)
 
 open Model
@@ -467,6 +467,8 @@ let route c =
           let token = match Auth.client_of id with Some cl -> cl.token | None -> "" in
           Stream.serve c.reqd ~user_id:(Auth.user_of id).id ~token;
           Lwt.return_unit)
+  (* No plugins: the list Gotify answers for a user who has none. *)
+  | `GET, [ "plugin" ] -> with_auth Auth.client c (fun _ -> ok_json c (`List []))
   | `GET, [ "current"; "user" ] ->
       with_auth Auth.client c (fun id -> ok_json c (current_user_json ?client:(Auth.client_of id) (Auth.user_of id)))
   | `POST, [ "current"; "user"; "password" ] ->
@@ -498,7 +500,7 @@ let route c =
   | _ -> fail c 404 "page not found"
 
 let api_roots =
-  [ "health"; "version"; "gotifyinfo"; "auth"; "message"; "application"; "client"; "stream"; "current"; "user"; "image" ]
+  [ "health"; "version"; "gotifyinfo"; "auth"; "message"; "application"; "client"; "stream"; "current"; "user"; "image"; "plugin" ]
 
 let dispatch reqd =
   let path, _ = H.path_and_query reqd in
