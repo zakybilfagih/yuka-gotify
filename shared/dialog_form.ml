@@ -34,3 +34,10 @@ let submit ?(class_ = "button contained") form label =
         ([ Yuka.attr "type" "submit"; Yuka.attr "class" class_ ]
         @ if Yuka.State.get (Yuka.Form.pending form) then [ Yuka.attr "disabled" "" ] else [])
         [ Yuka.text label ])
+
+(* The [on_ok] of a form that changes the apps: the drawer and the
+   Applications table keep their apps query through the redirect's client
+   navigation, so it asks them again, then follows the redirect. *)
+let apps_changed redirect =
+  Yuka.Remote.invalidate Actions.apps;
+  Yuka.Browser.navigate redirect

@@ -1,9 +1,13 @@
 (* The drawer: All Messages and the applications, the current one marked
    with aria-current. An island, because the layout stays on the screen
    across client navigations, so only the client knows the current page.
-   The children go at the end (the Notifications button). *)
+   The children go at the end (the Notifications button). The applications
+   come from the apps query (Yuka.Remote), as in the Applications table, so
+   a change there shows here too. *)
 
-let[@client] make ~(apps : Model.app_link list) ~children () =
+let[@client] make ~children () =
+  let remote = Yuka.Remote.make Actions.apps (fun () -> "drawer") in
+  let apps () = Option.value (Yuka.Status.data (Yuka.State.get (Yuka.Remote.state remote))) ~default:[] in
   let current which () =
     match (Yuka.State.get (Routes.current ()), which) with
     | Some (Routes.Messages _), None -> `page
@@ -15,13 +19,13 @@ let[@client] make ~(apps : Model.app_link list) ~children () =
     <hr />
     (Yuka.fragment
        (List.map
-          (fun (a : Model.app_link) ->
+          (fun (a : Model.app_row) ->
             <a class_="drawer-item" href=(Routes.app_messages ~app:a.id ()) aria_current=(current (Some a.id) ())>
               <img src=a.image alt="" width="24" height="24" />
               (Yuka.text a.name)
             </a>)
-          apps))
-    (if apps = [] then <p class_="drawer-empty">"No applications. " <a href=(Routes.applications ())>"Create one"</a></p>
+          (apps ())))
+    (if apps () = [] then <p class_="drawer-empty">"No applications. " <a href=(Routes.applications ())>"Create one"</a></p>
      else Yuka.empty)
     children
   </nav>

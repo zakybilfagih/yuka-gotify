@@ -2,7 +2,7 @@
 
 let[@client] make ~(id : int option) ~(name : string) ~(description : string) ~(priority : int) ~(label : string)
     ~children () =
-  <Yuka.Form action=Actions.app_save key=(match id with Some id -> Int.to_string id | None -> "new")>
+  <Yuka.Form action=Actions.app_save key=(match id with Some id -> Int.to_string id | None -> "new") on_ok=Dialog_form.apps_changed>
     (fun form ->
       <div class_="stack-plain">
         (match id with Some id -> <input type_=`hidden name="id" value=(Int.to_string id) /> | None -> Yuka.empty)

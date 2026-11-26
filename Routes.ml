@@ -25,18 +25,18 @@ let routes =
           Router.route Messages_remove ~path:"/messages/delete" ~page:messages_remove ?overlay:messages_remove_dialog;
           Router.route Message_remove ~path:"/messages/delete/:id<int>" ~page:message_remove ~loader:Loaders.message
             ~search:{ back = optional string };
-          Router.route App_messages ~path:"/messages/:app<int>" ~page:app_messages ~search:{ pages = default int 1 };
+          Router.route App_messages ~path:"/messages/:app<int>" ~page:app_messages ~search:{ pages = default int 1 } ~loader:Loaders.For_app.apps;
           Router.route App_messages_remove ~path:"/messages/:app<int>/delete" ~page:app_messages_remove
-            ?overlay:app_messages_remove_dialog;
-          Router.route App_push ~path:"/messages/:app<int>/push" ~page:app_push ?overlay:app_push_dialog;
+            ?overlay:app_messages_remove_dialog ~loader:Loaders.For_app.apps;
+          Router.route App_push ~path:"/messages/:app<int>/push" ~page:app_push ?overlay:app_push_dialog ~loader:Loaders.For_app.apps;
           Router.route Applications ~path:"/applications" ~page:applications ~loader:Loaders.apps
             ~search:{ reveal = optional string };
           Router.route App_new ~path:"/applications/new" ~page:app_new ?overlay:app_new_dialog;
-          Router.route App_edit ~path:"/applications/:id<int>/edit" ~page:app_edit ?overlay:app_edit_dialog;
-          Router.route App_remove ~path:"/applications/:id<int>/delete" ~page:app_remove ?overlay:app_remove_dialog;
-          Router.route App_token ~path:"/applications/:id<int>/token" ~page:app_token ?overlay:app_token_dialog;
+          Router.route App_edit ~path:"/applications/:id<int>/edit" ~page:app_edit ?overlay:app_edit_dialog ~loader:Loaders.For_id.apps;
+          Router.route App_remove ~path:"/applications/:id<int>/delete" ~page:app_remove ?overlay:app_remove_dialog ~loader:Loaders.For_id.apps;
+          Router.route App_token ~path:"/applications/:id<int>/token" ~page:app_token ?overlay:app_token_dialog ~loader:Loaders.For_id.apps;
           Router.route App_image_remove ~path:"/applications/:id<int>/image/delete" ~page:app_image_remove
-            ?overlay:app_image_remove_dialog;
+            ?overlay:app_image_remove_dialog ~loader:Loaders.For_id.apps;
           Router.route Clients ~path:"/clients" ~page:Pages.clients ~loader:Loaders.clients ~search:{ reveal = optional string };
           Router.route Client_new ~path:"/clients/new" ~page:client_new ?overlay:client_new_dialog;
           Router.route Client_edit ~path:"/clients/:id<int>/edit" ~page:client_edit ?overlay:client_edit_dialog

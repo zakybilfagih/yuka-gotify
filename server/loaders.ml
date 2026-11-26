@@ -1,27 +1,35 @@
 (* The session of every signed-in page, else the login page. The shell
    layout takes it, and a client navigation keeps the layout (and so opens a
    dialog as an overlay) only while it is the same: so it holds no time of
-   last use, of the client (moved on every 5 minutes) nor of the apps (moved
-   on by each push), which the layout does not show. The Applications page
-   loads the apps with theirs ([apps]). *)
+   last use of the client (moved on every 5 minutes), and no apps, which
+   change without a navigation (a reorder, an upload, each push moves on
+   their last use). The drawer reads them from the apps query, which this
+   request's apps answer in the server render (Ui.page_apps); the pages that
+   show them take [apps]. *)
 let session req =
   Yuka.Async.map
     (function
       | Some (s : Ui.session) ->
-          Ok
-            {
-              s with
-              client = { s.client with last_used = None };
-              apps = List.map (fun (a : Gotify_core.Model.application) -> { a with last_used = None }) s.apps;
-            }
+          Ui.By_request.replace Ui.page_apps req s.apps;
+          Ok { s with client = { s.client with last_used = None }; apps = [] }
       | None -> Error (Yuka.Server.Redirect { location = "/login"; kind = `See_other }))
     (Yuka_server.to_async (Ui.find req))
 
-(* The user's applications as they are now, with their time of last use. *)
+(* The user's applications as they are now, for the pages that show them. *)
 let apps req =
   Yuka.Async.bind (session req) (function
     | Error _ as e -> Yuka.Async.return e
     | Ok (s : Ui.session) -> Yuka.Async.map Result.ok (Yuka_server.to_async (Gotify_core.Db.apps_of_user s.user.id)))
+
+(* [apps] for the routes under /messages/:app and /applications/:id; the
+   last name of a loader names its result. *)
+module For_app = struct
+  let apps req ~app:_ = apps req
+end
+
+module For_id = struct
+  let apps req ~id:_ = apps req
+end
 
 let clients req =
   Yuka.Async.bind (session req) (function
@@ -48,7 +56,7 @@ let message req ~id =
         Yuka.Async.map
           (function
             | Some (m : Gotify_core.Model.message)
-              when List.exists (fun (a : Gotify_core.Model.application) -> a.id = m.app_id) s.apps ->
+              when List.exists (fun (a : Gotify_core.Model.application) -> a.id = m.app_id) (Ui.By_request.find Ui.page_apps req) ->
                 Ok (Some m)
             | _ -> Ok None)
           (Yuka_server.to_async (Gotify_core.Db.message_by_id id)))

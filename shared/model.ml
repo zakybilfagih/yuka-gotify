@@ -20,10 +20,7 @@ type feed = { user : int; app : int option; pages : int } [@@deriving codec]
 (** The messages of a feed, newest first, and whether older ones remain. *)
 type page = { messages : message list; more : bool } [@@deriving codec]
 
-(** An application in the drawer. *)
-type app_link = { id : int; name : string; image : string } [@@deriving codec]
-
-(** A row of the Applications table. *)
+(** An application: a row of the Applications table, and a link of the drawer. *)
 type app_row = {
   id : int;
   name : string;

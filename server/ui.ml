@@ -12,7 +12,23 @@ let cookie_name = "gotify-ui"
 let theme_cookie = "gotify-theme"
 let the_sessions () = match !sessions with Some s -> s | None -> failwith "Ui.sessions not set"
 
+(** [apps]: the user's applications. The session that a page gets
+    (Loaders.session) has none: the pages that show them take [~apps]
+    (Loaders.apps), and the islands read the apps query. *)
 type session = { user : M.user; client : M.client; apps : M.application list; theme : string }
+
+(* The apps of a page request, kept by its session loader for the apps query,
+   which the server render of the drawer and the Applications table calls
+   with the same request: answered at once, the query settles in the render,
+   whose HTML then shows the apps, also without JavaScript. *)
+module By_request = Ephemeron.K1.Make (struct
+  type t = Yuka.Server.request
+
+  let equal = ( == )
+  let hash = Hashtbl.hash
+end)
+
+let page_apps : M.application list By_request.t = By_request.create 16
 
 let client_id req =
   Option.bind (Yuka_server.Signed_cookie.get (the_sessions ()) req cookie_name) int_of_string_opt
@@ -140,3 +156,18 @@ let last_used = function
   | Some t ->
       let now = Unix.gettimeofday () in
       if now -. t < 300. then "Recently" else App_shared.Time_ago.text ~now t
+
+(** An application as the apps query answers it (Actions.apps). *)
+let app_row (a : Gotify_core.Model.application) : App_shared.Model.app_row =
+  {
+    id = a.id;
+    name = a.name;
+    description = a.description;
+    priority = a.default_priority;
+    last_used = last_used a.last_used;
+    last_used_title = (match a.last_used with Some t -> date t | None -> "");
+    created = day a.created_at;
+    created_title = date a.created_at;
+    image = Static.app_image a;
+    custom_image = a.image <> "";
+  }

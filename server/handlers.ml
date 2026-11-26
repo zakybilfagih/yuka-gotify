@@ -354,6 +354,13 @@ let password (s : Ui.session) ({ pass; elevate_pass = _ } : App_shared.Actions.p
 
 let register () =
   let module A = App_shared.Actions in
+  Yuka.Server.Action.implement A.apps (fun req _island ->
+      match Ui.By_request.find_opt Ui.page_apps req with
+      | Some apps -> Yuka.Async.return (List.map Ui.app_row apps)
+      | None -> (
+          Yuka.Async.bind (Yuka_server.to_async (Ui.find req)) (function
+            | None -> Yuka.Server.Action.reject "You are not signed in"
+            | Some s -> Yuka.Async.return (List.map Ui.app_row s.apps))));
   Yuka.Server.Action.implement A.reorder_apps (fun req ids ->
       Yuka.Async.bind (Yuka_server.to_async (Ui.find req)) (function
         | None -> Yuka.Server.Action.reject "You are not signed in"

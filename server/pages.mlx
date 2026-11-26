@@ -15,6 +15,8 @@ let alert_view = function
 (* The user name of a session that must give its password in a dialog form. *)
 let password_user (session : Ui.session) = if Ui.elevated session then None else Some session.user.name
 
+let find_app (apps : M.application list) id = List.find_opt (fun (a : M.application) -> a.id = id) apps
+
 let link_button ?(class_ = "button text") href label = <a class_ href>(Yuka.text label)</a>
 
 let shell ~(session : Ui.session) ~children () =
@@ -37,7 +39,7 @@ let shell ~(session : Ui.session) ~children () =
     </header>
     <div class_="layout">
       <Yuka.Client>
-        <Drawer apps=(List.map (fun (a : M.application) -> { Model.id = a.id; name = a.name; image = Static.app_image a }) session.apps)>
+        <Drawer>
           <Yuka.Client><Notifications user=session.user.id /></Yuka.Client>
         </Drawer>
       </Yuka.Client>
@@ -59,9 +61,9 @@ let messages ~(session : Ui.session) ~pages ~alert () =
       let feed = { Model.user = session.user.id; app = None; pages } in
       Yuka.fragment [ alert_view alert; message_list feed ~title:"All Messages" ])
 
-let app_messages ~(session : Ui.session) ~app ~pages ~alert () =
+let app_messages ~(session : Ui.session) ~(apps : M.application list) ~app ~pages ~alert () =
   let title =
-    match List.find_opt (fun (a : M.application) -> a.id = app) session.apps with
+    match find_app apps app with
     | Some a -> a.name
     | None -> "Unknown application"
   in
@@ -91,18 +93,7 @@ let applications ~(session : Ui.session) ~(apps : M.application list) ~reveal ~a
         (alert_view alert)
         (token_reveal ~kind:"Application" (Ui.revealed session reveal))
         <div class_="card table-card">
-          <Yuka.Client>
-            <App_table
-              apps=(List.map
-                      (fun (a : M.application) ->
-                        { Model.id = a.id; name = a.name; description = a.description; priority = a.default_priority;
-                          last_used = Ui.last_used a.last_used;
-                          last_used_title = (match a.last_used with Some t -> Ui.date t | None -> "");
-                          created = Ui.day a.created_at; created_title = Ui.date a.created_at;
-                          image = Static.app_image a; custom_image = a.image <> "" })
-                      apps) />
-          </Yuka.Client>
-          (if apps = [] then <p class_="empty">"No applications"</p> else Yuka.empty)
+          <Yuka.Client><App_table /></Yuka.Client>
         </div>
       </section>)
 
@@ -224,16 +215,14 @@ let with_submit cancel button = <div class_="dialog-actions">cancel button</div>
 let missing back =
   ("Not found", back, fun cancel -> Yuka.fragment [ <p>"It does not exist anymore."</p>; <div class_="dialog-actions">cancel</div> ])
 
-let find_app (session : Ui.session) id = List.find_opt (fun (a : M.application) -> a.id = id) session.apps
-
 let app_new_view =
   ( "Create application",
     "/applications",
     fun actions ->
       <Yuka.Client><App_form id=None name="" description="" priority=0 label="Create">actions</App_form></Yuka.Client> )
 
-let app_edit_view ~session ~id =
-  match find_app session id with
+let app_edit_view ~(apps : M.application list) ~id =
+  match find_app apps id with
   | None -> missing "/applications"
   | Some a ->
       ( "Edit " ^ a.name,
@@ -243,8 +232,8 @@ let app_edit_view ~session ~id =
             <App_form id=(Some id) name=a.name description=a.description priority=a.default_priority label="Save">actions</App_form>
           </Yuka.Client> )
 
-let app_remove_view ~(session : Ui.session) ~id =
-  match find_app session id with
+let app_remove_view ~(apps : M.application list) ~(session : Ui.session) ~id =
+  match find_app apps id with
   | None -> missing "/applications"
   | Some a ->
       ( "Delete " ^ a.name,
@@ -254,8 +243,8 @@ let app_remove_view ~(session : Ui.session) ~id =
             <Confirm_form target=(Actions.Target.to_string (App_delete id)) text="The application and all its messages are deleted." button="Delete" danger=true user=(password_user session)>actions</Confirm_form>
           </Yuka.Client> )
 
-let app_token_view ~(session : Ui.session) ~id =
-  match find_app session id with
+let app_token_view ~(apps : M.application list) ~(session : Ui.session) ~id =
+  match find_app apps id with
   | None -> missing "/applications"
   | Some a ->
       ( "New token for " ^ a.name,
@@ -265,8 +254,8 @@ let app_token_view ~(session : Ui.session) ~id =
             <Confirm_form target=(Actions.Target.to_string (App_token id)) text="The current token stops working: update everything that pushes to this application." button="New token" danger=false user=(password_user session)>actions</Confirm_form>
           </Yuka.Client> )
 
-let app_image_remove_view ~(session : Ui.session) ~id =
-  match find_app session id with
+let app_image_remove_view ~(apps : M.application list) ~id =
+  match find_app apps id with
   | None -> missing "/applications"
   | Some a ->
       ( "Delete the image of " ^ a.name,
@@ -347,9 +336,9 @@ let user_remove_view ~session ~(user : M.user option) ~id =
             <Confirm_form target=(Actions.Target.to_string (User_delete id)) text="The user, their applications, clients and messages are deleted." button="Delete" danger=true user=(password_user session)>actions</Confirm_form>
           </Yuka.Client> )
 
-let app_push_view ~(session : Ui.session) ~app =
+let app_push_view ~(apps : M.application list) ~app =
   let back = Routes.app_messages ~app () in
-  match find_app session app with
+  match find_app apps app with
   | None -> missing back
   | Some a ->
       ( "Push message to " ^ a.name,
@@ -361,7 +350,7 @@ let app_push_view ~(session : Ui.session) ~app =
 
 (* Delete all: Gotify asks first, without a password. [app]: [None] for every
    message of the user. *)
-let messages_remove_view ~(session : Ui.session) ~app =
+let messages_remove_view ~(apps : M.application list) ~app =
   let confirm text actions =
       <Yuka.Client>
         <Confirm_form target=(Actions.Target.to_string (Messages_delete app)) text button="Delete" danger=true user=None>actions</Confirm_form>
@@ -371,7 +360,7 @@ let messages_remove_view ~(session : Ui.session) ~app =
   | None -> ("Delete all messages", Routes.messages (), confirm "Every message of every application is deleted.")
   | Some id -> (
       let back = Routes.app_messages ~app:id () in
-      match find_app session id with
+      match find_app apps id with
       | None -> missing back
       | Some a -> ("Delete all messages of " ^ a.name, back, confirm "Every message of this application is deleted."))
 
@@ -393,29 +382,29 @@ let message_remove_view ~(message : M.message option) ~back =
 
 let message_remove ~session ~message ~id:_ ~back ~alert () = dialog Page ~session ~alert (message_remove_view ~message ~back)
 
-let messages_remove ~session ~alert () = dialog Page ~session ~alert (messages_remove_view ~session ~app:None)
-let messages_remove_dialog ~session ~alert () = dialog Overlay ~session ~alert (messages_remove_view ~session ~app:None)
-let app_messages_remove ~session ~app ~alert () = dialog Page ~session ~alert (messages_remove_view ~session ~app:(Some app))
+let messages_remove ~session ~alert () = dialog Page ~session ~alert (messages_remove_view ~apps:[] ~app:None)
+let messages_remove_dialog ~session ~alert () = dialog Overlay ~session ~alert (messages_remove_view ~apps:[] ~app:None)
+let app_messages_remove ~session ~apps ~app ~alert () = dialog Page ~session ~alert (messages_remove_view ~apps ~app:(Some app))
 
-let app_messages_remove_dialog ~session ~app ~alert () =
-  dialog Overlay ~session ~alert (messages_remove_view ~session ~app:(Some app))
+let app_messages_remove_dialog ~session ~apps ~app ~alert () =
+  dialog Overlay ~session ~alert (messages_remove_view ~apps ~app:(Some app))
 
-let app_push ~session ~app ~alert () = dialog Page ~session ~alert (app_push_view ~session ~app)
-let app_push_dialog ~session ~app ~alert () = dialog Overlay ~session ~alert (app_push_view ~session ~app)
+let app_push ~session ~apps ~app ~alert () = dialog Page ~session ~alert (app_push_view ~apps ~app)
+let app_push_dialog ~session ~apps ~app ~alert () = dialog Overlay ~session ~alert (app_push_view ~apps ~app)
 let app_new ~session ~alert () = dialog Page ~session ~alert app_new_view
 let app_new_dialog ~session ~alert () = dialog Overlay ~session ~alert app_new_view
 let client_new ~session ~alert () = dialog Page ~session ~alert client_new_view
 let client_new_dialog ~session ~alert () = dialog Overlay ~session ~alert client_new_view
 let user_new ~session ~alert () = dialog Page ~session ~alert (user_new_view ~session)
 let user_new_dialog ~session ~alert () = dialog Overlay ~session ~alert (user_new_view ~session)
-let app_edit ~session ~id ~alert () = dialog Page ~session ~alert (app_edit_view ~session ~id)
-let app_edit_dialog ~session ~id ~alert () = dialog Overlay ~session ~alert (app_edit_view ~session ~id)
-let app_remove ~session ~id ~alert () = dialog Page ~session ~alert (app_remove_view ~session ~id)
-let app_image_remove ~session ~id ~alert () = dialog Page ~session ~alert (app_image_remove_view ~session ~id)
-let app_image_remove_dialog ~session ~id ~alert () = dialog Overlay ~session ~alert (app_image_remove_view ~session ~id)
-let app_remove_dialog ~session ~id ~alert () = dialog Overlay ~session ~alert (app_remove_view ~session ~id)
-let app_token ~session ~id ~alert () = dialog Page ~session ~alert (app_token_view ~session ~id)
-let app_token_dialog ~session ~id ~alert () = dialog Overlay ~session ~alert (app_token_view ~session ~id)
+let app_edit ~session ~apps ~id ~alert () = dialog Page ~session ~alert (app_edit_view ~apps ~id)
+let app_edit_dialog ~session ~apps ~id ~alert () = dialog Overlay ~session ~alert (app_edit_view ~apps ~id)
+let app_remove ~session ~apps ~id ~alert () = dialog Page ~session ~alert (app_remove_view ~apps ~session ~id)
+let app_image_remove ~session ~apps ~id ~alert () = dialog Page ~session ~alert (app_image_remove_view ~apps ~id)
+let app_image_remove_dialog ~session ~apps ~id ~alert () = dialog Overlay ~session ~alert (app_image_remove_view ~apps ~id)
+let app_remove_dialog ~session ~apps ~id ~alert () = dialog Overlay ~session ~alert (app_remove_view ~apps ~session ~id)
+let app_token ~session ~apps ~id ~alert () = dialog Page ~session ~alert (app_token_view ~apps ~session ~id)
+let app_token_dialog ~session ~apps ~id ~alert () = dialog Overlay ~session ~alert (app_token_view ~apps ~session ~id)
 let client_edit ~session ~client ~id ~alert () = dialog Page ~session ~alert (client_edit_view ~client ~id)
 let client_edit_dialog ~session ~client ~id ~alert () = dialog Overlay ~session ~alert (client_edit_view ~client ~id)
 let client_remove ~session ~client ~id ~alert () = dialog Page ~session ~alert (client_remove_view ~session ~client ~id)

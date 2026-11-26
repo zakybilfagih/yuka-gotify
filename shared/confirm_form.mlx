@@ -5,7 +5,7 @@
 
 let[@client] make ~(target : string) ~(text : string) ~(button : string) ~(danger : bool) ~(user : string option)
     ~children () =
-  <Yuka.Form action=Actions.confirm>
+  <Yuka.Form action=Actions.confirm on_ok=Dialog_form.apps_changed>
     (fun form ->
       <div>
         <input type_=`hidden name="target" value=target />

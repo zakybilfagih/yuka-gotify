@@ -1,7 +1,7 @@
 (* The Applications table, in the order of their sort keys, which the drawer
    follows too. A row moves by dragging its handle, or with the Up and Down
-   arrows on the focused handle; the island saves the whole order and loads
-   the page again, so the drawer shows it. Without JavaScript, each row has
+   arrows on the focused handle; the island saves the whole order and asks
+   the apps query again, so the drawer shows it too. Without JavaScript, each row has
    Up and Down buttons that post a move. The image column uploads a new
    image (picking a file posts it at once; without JavaScript, the Upload
    button does), and a click on an uploaded image opens its delete dialog. *)
@@ -31,14 +31,13 @@ let index_of id ids =
   let rec go i = function [] -> 0 | x :: rest -> if x = id then i else go (i + 1) rest in
   go 0 ids
 
-(* The handle moved with the keyboard, to focus again in the table of the page that the move
-   loads: Yuka keeps the focus by id on a refresh, but the handles there are hidden until the
-   island starts. *)
-let refocus = ref None
-
-let[@client] make ~(apps : Model.app_row list) () =
-  let saved = List.map (fun (a : Model.app_row) -> a.id) apps in
-  let order = Yuka.State.make saved in
+let[@client] make () =
+  (* The applications, from the apps query, which the server render answers
+     (Loaders.session), so the page holds them, also without JavaScript. *)
+  let remote = Yuka.Remote.make Actions.apps (fun () -> "table") in
+  let apps () = Option.value (Yuka.Status.data (Yuka.State.get (Yuka.Remote.state remote))) ~default:[] in
+  (* The order while a row is dragged, before it is saved. *)
+  let moving = Yuka.State.make None in
   let started = Yuka.State.make false in
   (* The row whose handle is pressed, which may be dragged; the row dragged. *)
   let armed = Yuka.State.make None in
@@ -49,7 +48,10 @@ let[@client] make ~(apps : Model.app_row list) () =
   let upload id _ =
     Yuka.State.set uploading (Some id);
     !Platform.upload (upload_id id) (function
-      | Some "/applications" -> Yuka.Browser.refresh ()
+      | Some "/applications" ->
+          (* The table and the drawer get the new image. *)
+          Yuka.State.set uploading None;
+          Yuka.Remote.invalidate Actions.apps
       | Some url -> Yuka.Browser.navigate ~replace:true url
       | None ->
           Yuka.State.set uploading None;
@@ -57,42 +59,48 @@ let[@client] make ~(apps : Model.app_row list) () =
   in
   Yuka.Effect.after (fun () ->
       Yuka.State.set started true;
-      Option.iter (fun id -> Yuka.Browser.focus (handle_id id)) !refocus;
-      refocus := None;
       Yuka.Browser.on_window "pointerup" (fun _ -> if Yuka.State.peek dragging = None then Yuka.State.set armed None));
+  let ids () = List.map (fun (a : Model.app_row) -> a.id) (apps ()) in
+  let order () = match Yuka.State.get moving with Some ids -> ids | None -> ids () in
   let rows () =
-    List.filter_map (fun id -> List.find_opt (fun (a : Model.app_row) -> a.id = id) apps) (Yuka.State.get order)
+    let all = apps () in
+    List.filter_map (fun id -> List.find_opt (fun (a : Model.app_row) -> a.id = id) all) (order ())
   in
+  let in_order ids all = List.filter_map (fun id -> List.find_opt (fun (a : Model.app_row) -> a.id = id) all) ids in
+  (* The new order shows at once and goes back on a failure; the drawer
+     follows once it is saved. *)
   let save () =
-    let ids = Yuka.State.peek order in
-    if ids <> saved then
-      Yuka.Async.on_result (Yuka.Action.call Actions.reorder_apps ids) (function
-        | Ok (Ok ()) -> Yuka.Browser.refresh ()
-        | Ok (Error e) ->
-            refocus := None;
-            Yuka.State.set order saved;
-            Yuka.State.set failure (Some (Yuka.Status.error_to_string e))
-        | Error m ->
-            refocus := None;
-            Yuka.State.set order saved;
-            Yuka.State.set failure (Some m))
+    match Yuka.State.peek moving with
+    | None -> ()
+    | Some order ->
+        Yuka.State.set moving None;
+        if order <> List.map (fun (a : Model.app_row) -> a.id) (Option.value (Yuka.Status.data (Yuka.State.peek (Yuka.Remote.state remote))) ~default:[])
+        then
+          Yuka.Async.on_result
+            (Yuka.Remote.optimistic remote ~change:(in_order order) (fun () -> Yuka.Action.call Actions.reorder_apps order))
+            (function
+              | Ok (Ok ()) ->
+                  Yuka.State.set failure None;
+                  Yuka.Remote.invalidate Actions.apps
+              | Ok (Error e) -> Yuka.State.set failure (Some (Yuka.Status.error_to_string e))
+              | Error m -> Yuka.State.set failure (Some m))
   in
+  let move f = Yuka.State.set moving (Some (f (match Yuka.State.peek moving with Some o -> o | None -> ids ()))) in
   let key id event =
     let by = match Yuka.Event.key event with "ArrowUp" -> Some (-1) | "ArrowDown" -> Some 1 | _ -> None in
     match by with
     | None -> ()
     | Some by ->
         Yuka.Event.prevent_default event;
-        Yuka.State.update order (fun ids -> place ids id (index_of id ids + by));
-        Yuka.Browser.focus (handle_id id);
-        if Yuka.State.peek order <> saved then refocus := Some id;
-        save ()
+        move (fun ids -> place ids id (index_of id ids + by));
+        save ();
+        Yuka.Browser.focus (handle_id id)
   in
   let over id event =
     match Yuka.State.peek dragging with
     | Some d ->
         Yuka.Event.prevent_default event;
-        if d <> id then Yuka.State.update order (fun ids -> place ids d (index_of id ids))
+        if d <> id then move (fun ids -> place ids d (index_of id ids))
     | None -> ()
   in
   let ended _ =
@@ -169,4 +177,5 @@ let[@client] make ~(apps : Model.app_row list) () =
              </tr>))
       </tbody>
     </table>
+    <p class_="empty" hidden=(apps () <> [])>"No applications"</p>
   </div>

@@ -66,6 +66,13 @@ let elevate = Yuka.Form.action ~name:"elevate" ~fields:elevate_form ~output:Yuka
 (** The choices of the Elevate dialog, as Gotify's web UI. *)
 let durations = [ (3600, "1 hour"); (86400, "1 day"); (30 * 86400, "30 days"); (365 * 86400, "1 year"); (0, "End the elevation") ]
 
+(** The user's applications, in their order, for the Applications table and
+    the drawer (Yuka.Remote). The input names the island that asks, which the
+    answer ignores: a Remote reads the first answer of its key in the page,
+    so after a client navigation the table would read the drawer's answer
+    of the first page load, still in the layout, and show the apps of then. *)
+let apps = Yuka.Action.query ~name:"apps" ~input:Yuka.Codec.string ~output:(Yuka.Codec.list Model.app_row_codec)
+
 (** The ids of all the user's applications, in their new order. *)
 let reorder_apps = Yuka.Action.mutation ~name:"reorder_apps" ~input:(Yuka.Codec.list Yuka.Codec.int) ~output:Yuka.Codec.unit
 
