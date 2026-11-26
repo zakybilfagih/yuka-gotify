@@ -13,6 +13,7 @@ type application = {
   sort_key : string;
   created_at : float;
   last_used : float option;
+  image : string;  (** the file name in Images.dir; "" for the default image *)
 }
 
 type client = {
@@ -53,7 +54,7 @@ let application_json ?token (a : application) : Yojson.Safe.t =
        ("name", `String a.name);
        ("description", `String a.description);
        ("internal", `Bool a.internal);
-       ("image", `String "static/defaultapp.png");
+       ("image", `String (Images.path_of a.image));
        ("defaultPriority", `Int a.default_priority);
        ("sortKey", `String a.sort_key);
        ("createdAt", time a.created_at);

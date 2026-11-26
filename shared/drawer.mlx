@@ -3,7 +3,7 @@
    across client navigations, so only the client knows the current page.
    The children go at the end (the Notifications button). *)
 
-let[@client] make ~(apps : Model.app_link list) ~(image : string) ~children () =
+let[@client] make ~(apps : Model.app_link list) ~children () =
   let current which () =
     match (Yuka.State.get (Routes.current ()), which) with
     | Some (Routes.Messages _), None -> `page
@@ -17,7 +17,7 @@ let[@client] make ~(apps : Model.app_link list) ~(image : string) ~children () =
        (List.map
           (fun (a : Model.app_link) ->
             <a class_="drawer-item" href=(Routes.app_messages ~app:a.id ()) aria_current=(current (Some a.id) ())>
-              <img src=image alt="" width="24" height="24" />
+              <img src=a.image alt="" width="24" height="24" />
               (Yuka.text a.name)
             </a>)
           apps))

@@ -9,11 +9,12 @@ let ( let* ) = Lwt.bind
 
 let view (apps : Model.application list) (m : Model.message) : S.Model.message =
   let markdown = Markdown.is_markdown m.extras in
+  let app = List.find_opt (fun (a : Model.application) -> a.id = m.app_id) apps in
   {
     id = m.id;
     app_id = m.app_id;
-    app_name =
-      (match List.find_opt (fun (a : Model.application) -> a.id = m.app_id) apps with Some a -> a.name | None -> "");
+    app_name = (match app with Some a -> a.name | None -> "");
+    image = (match app with Some a -> Static.app_image a | None -> Static.url "defaultapp.png");
     title = m.title;
     body = Markdown.body ~markdown m.message;
     markdown;

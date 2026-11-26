@@ -37,9 +37,8 @@ let shell ~(session : Ui.session) ~children () =
     </header>
     <div class_="layout">
       <Yuka.Client>
-        <Drawer apps=(List.map (fun (a : M.application) -> { Model.id = a.id; name = a.name }) session.apps)
-          image=(Static.url "defaultapp.png")>
-          <Yuka.Client><Notifications user=session.user.id icon=(Static.url "defaultapp.png") /></Yuka.Client>
+        <Drawer apps=(List.map (fun (a : M.application) -> { Model.id = a.id; name = a.name; image = Static.app_image a }) session.apps)>
+          <Yuka.Client><Notifications user=session.user.id /></Yuka.Client>
         </Drawer>
       </Yuka.Client>
       <main class_="content">children</main>
@@ -52,7 +51,7 @@ let shell ~(session : Ui.session) ~children () =
    without JavaScript keeps and the page with it shows until the state comes. *)
 let message_list feed ~title =
   <Yuka.Await async=(Yuka_server.to_async (Feed.load feed)) blocking=`Yes loading=Yuka.empty>
-    (fun initial -> <Yuka.Client><Message_list feed title initial image=(Static.url "defaultapp.png") /></Yuka.Client>)
+    (fun initial -> <Yuka.Client><Message_list feed title initial /></Yuka.Client>)
   </Yuka.Await>
 
 let messages ~(session : Ui.session) ~pages ~alert () =
@@ -98,11 +97,12 @@ let applications ~(session : Ui.session) ~reveal ~alert () =
         </details>
         <div class_="card table-card">
           <Yuka.Client>
-            <App_table image=(Static.url "defaultapp.png")
+            <App_table
               apps=(List.map
                       (fun (a : M.application) ->
                         { Model.id = a.id; name = a.name; description = a.description; priority = a.default_priority;
-                          last_used = Ui.date_opt a.last_used; created = Ui.date a.created_at })
+                          last_used = Ui.date_opt a.last_used; created = Ui.date a.created_at;
+                          image = Static.app_image a; custom_image = a.image <> "" })
                       session.apps) />
           </Yuka.Client>
           (if session.apps = [] then <p class_="empty">"No applications"</p> else Yuka.empty)
@@ -261,6 +261,17 @@ let app_token_view ~(session : Ui.session) ~id =
             <Confirm_form target=(Actions.Target.to_string (App_token id)) text="The current token stops working: update everything that pushes to this application." button="New token" danger=false user=(password_user session)>actions</Confirm_form>
           </Yuka.Client> )
 
+let app_image_remove_view ~(session : Ui.session) ~id =
+  match find_app session id with
+  | None -> missing "/applications"
+  | Some a ->
+      ( "Delete the image of " ^ a.name,
+        "/applications",
+        fun actions ->
+          <Yuka.Client>
+            <Confirm_form target=(Actions.Target.to_string (App_image_delete id)) text="The application gets the default image again." button="Delete" danger=true user=None>actions</Confirm_form>
+          </Yuka.Client> )
+
 let client_edit_view ~(client : M.client option) ~id =
   match client with
   | None -> missing "/clients"
@@ -337,6 +348,8 @@ let app_push_dialog ~session ~app ~alert () = dialog Overlay ~session ~alert (ap
 let app_edit ~session ~id ~alert () = dialog Page ~session ~alert (app_edit_view ~session ~id)
 let app_edit_dialog ~session ~id ~alert () = dialog Overlay ~session ~alert (app_edit_view ~session ~id)
 let app_remove ~session ~id ~alert () = dialog Page ~session ~alert (app_remove_view ~session ~id)
+let app_image_remove ~session ~id ~alert () = dialog Page ~session ~alert (app_image_remove_view ~session ~id)
+let app_image_remove_dialog ~session ~id ~alert () = dialog Overlay ~session ~alert (app_image_remove_view ~session ~id)
 let app_remove_dialog ~session ~id ~alert () = dialog Overlay ~session ~alert (app_remove_view ~session ~id)
 let app_token ~session ~id ~alert () = dialog Page ~session ~alert (app_token_view ~session ~id)
 let app_token_dialog ~session ~id ~alert () = dialog Overlay ~session ~alert (app_token_view ~session ~id)

@@ -27,6 +27,9 @@ let url name =
   let path = "/static/" ^ name in
   match !version with Some v -> path ^ "?v=" ^ v | None -> path
 
+(** The URL of an application's image: its upload at /image/, or the default image. *)
+let app_image (a : Gotify_core.Model.application) = if a.image = "" then url "defaultapp.png" else "/image/" ^ a.image
+
 (** Answers a GET or HEAD of a versioned URL and returns true; false for any other request. *)
 let serve reqd =
   match !version with

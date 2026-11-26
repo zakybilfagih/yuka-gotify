@@ -17,6 +17,7 @@ let routes =
       Router.post Logout ~path:"/ui/logout" ~handler:Handlers.logout;
       Router.post Theme ~path:"/ui/theme" ~handler:Handlers.theme;
       Router.post App_move ~path:"/ui/applications/:id<int>/move" ~handler:Handlers.app_move;
+      Router.post App_image ~path:"/ui/applications/:id<int>/image" ~handler:Handlers.app_image;
       Router.group ~path:"/" ~loader:Loaders.session ~layout:shell ~search:{ alert = optional string }
         [
           Router.route Messages ~path:"/" ~page:messages ~search:{ pages = default int 1 };
@@ -26,6 +27,8 @@ let routes =
           Router.route App_edit ~path:"/applications/:id<int>/edit" ~page:app_edit ?overlay:app_edit_dialog;
           Router.route App_remove ~path:"/applications/:id<int>/delete" ~page:app_remove ?overlay:app_remove_dialog;
           Router.route App_token ~path:"/applications/:id<int>/token" ~page:app_token ?overlay:app_token_dialog;
+          Router.route App_image_remove ~path:"/applications/:id<int>/image/delete" ~page:app_image_remove
+            ?overlay:app_image_remove_dialog;
           Router.route Clients ~path:"/clients" ~page:Pages.clients ~loader:Loaders.clients ~search:{ reveal = optional string };
           Router.route Client_edit ~path:"/clients/:id<int>/edit" ~page:client_edit ?overlay:client_edit_dialog
             ~loader:Loaders.client;

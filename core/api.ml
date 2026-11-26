@@ -1,5 +1,5 @@
-(* The REST API of Gotify 3.1.1 (router/router.go), minus plugins, images
-   and OIDC. [dispatch] answers a request whose path is one of Gotify's and
+(* The REST API of Gotify 3.1.1 (router/router.go), minus plugins and
+   OIDC. [dispatch] answers a request whose path is one of Gotify's and
    returns true; any other path is left to the Yuka app. *)
 
 open Model
@@ -170,6 +170,29 @@ let app_security c u id =
             let* () = Db.update_app { a with token = public } in
             ok_json c (`Assoc [ ("regenerateToken", `Assoc [ ("token", `String secret) ]) ])
           else ok_json c (`Assoc [])))
+
+(* POST /application/:id/image: the file of the multipart field "file"
+   becomes the image, and the old file is removed. *)
+let upload_image c (a : application) =
+  let* body = H.read_body ~limit:Images.max_size c.reqd in
+  match body with
+  | Error `Too_large -> fail c 413 "request body too large"
+  | Error `Bad -> fail c 400 "invalid request body"
+  | Ok body -> (
+      let file =
+        Option.bind (Option.bind (H.header c.reqd "content-type") H.boundary_of) (fun boundary ->
+            List.find_map (fun (field, filename, data) -> if field = "file" then Some (filename, data) else None) (H.files ~boundary body))
+      in
+      match file with
+      | None -> fail c 400 "file with key 'file' must be present"
+      | Some (filename, data) -> (
+          match Images.save ~filename data with
+          | Error m -> fail c 400 m
+          | Ok name ->
+              let* () = Db.set_app_image a.id name in
+              Images.remove a.image;
+              Stream.changed a.user_id;
+              ok_json c (application_json { a with image = name })))
 
 (* Clients *)
 
@@ -355,9 +378,24 @@ let route c =
               own_app c (Auth.user_of id) aid (fun a ->
                   if a.internal then fail c 400 "cannot delete internal application"
                   else
-                    let* () = Db.delete_app aid in
+                    let* () = Db.delete_app a in
                     Stream.changed a.user_id;
                     ok_empty c)))
+  | `POST, [ "application"; aid; "image" ] ->
+      with_auth Auth.client c (fun id -> with_id c aid (fun aid -> own_app c (Auth.user_of id) aid (upload_image c)))
+  | `DELETE, [ "application"; aid; "image" ] ->
+      with_auth Auth.client c (fun id ->
+          with_id c aid (fun aid ->
+              own_app c (Auth.user_of id) aid (fun a ->
+                  if a.image = "" then fail c 400 (Printf.sprintf "app with id %d does not have a customized image" aid)
+                  else
+                    let* () = Db.set_app_image a.id "" in
+                    Images.remove a.image;
+                    Stream.changed a.user_id;
+                    ok_json c (application_json { a with image = "" }))))
+  | (`GET | `HEAD), [ "image"; name ] ->
+      Images.serve c.reqd name;
+      Lwt.return_unit
   | `PUT, [ "application"; aid; "security" ] ->
       with_auth Auth.elevated_client c (fun id -> with_id c aid (app_security c (Auth.user_of id)))
   | `GET, [ "application"; aid; "message" ] ->
@@ -459,7 +497,8 @@ let route c =
   | `OPTIONS, _ -> ok_empty c
   | _ -> fail c 404 "page not found"
 
-let api_roots = [ "health"; "version"; "gotifyinfo"; "auth"; "message"; "application"; "client"; "stream"; "current"; "user" ]
+let api_roots =
+  [ "health"; "version"; "gotifyinfo"; "auth"; "message"; "application"; "client"; "stream"; "current"; "user"; "image" ]
 
 let dispatch reqd =
   let path, _ = H.path_and_query reqd in

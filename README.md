@@ -75,12 +75,13 @@ server. Other targets (`make help` lists them):
 ### Server options
 
 ```
-_build/default/server/main.exe [--port N] [--interface IP] [--db FILE] [--root DIR] [--secure]
+_build/default/server/main.exe [--port N] [--interface IP] [--db FILE] [--images DIR] [--root DIR] [--secure]
 ```
 
 - `--port`: default `8080`
 - `--interface`: default `127.0.0.1`; use `0.0.0.0` to listen on every interface
 - `--db`: the SQLite file, default `gotify.db`
+- `--images`: the directory of uploaded application images, default `images` (created if missing)
 - `--secure`: secure cookies, for a site behind HTTPS. Browsers accept those
   over plain HTTP only on `localhost`.
 

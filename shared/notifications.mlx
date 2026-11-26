@@ -5,7 +5,7 @@
    the browser, so a server render does not load the feed. *)
 
 module Watch = struct
-  let make ~(user : int) ~(icon : string) () =
+  let make ~(user : int) () =
     let live = Yuka.Live.make Topics.messages (fun () -> { Model.user; app = None; pages = 1 }) in
     (* The newest id seen; None until the first state, which notifies nothing. *)
     let seen = ref None in
@@ -21,12 +21,12 @@ module Watch = struct
                 |> List.filter (fun (m : Model.message) -> m.id > last)
                 |> List.rev
                 |> List.iter (fun (m : Model.message) ->
-                       !Platform.notify ~title:m.title ~body:(Markup.to_text m.body) ~icon));
+                       !Platform.notify ~title:m.title ~body:(Markup.to_text m.body) ~icon:m.image));
             seen := Some (Int.max newest (Option.value !seen ~default:0)));
     Yuka.empty
 end
 
-let[@client] make ~(user : int) ~(icon : string) () =
+let[@client] make ~(user : int) () =
   (* "unsupported" in the server render, the browser's answer once started. *)
   let permission = Yuka.State.make "unsupported" in
   Yuka.Effect.after (fun () -> Yuka.State.set permission (!Platform.permission ()));
@@ -36,6 +36,6 @@ let[@client] make ~(user : int) ~(icon : string) () =
        match Yuka.State.get permission with
        | "default" ->
            <button type_=`button class_="button text drawer-button" on_click=enable>"Enable notifications"</button>
-       | "granted" -> <Watch user icon />
+       | "granted" -> <Watch user />
        | _ -> Yuka.empty))
   </div>

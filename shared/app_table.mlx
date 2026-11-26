@@ -2,7 +2,9 @@
    follows too. A row moves by dragging its handle, or with the Up and Down
    arrows on the focused handle; the island saves the whole order and loads
    the page again, so the drawer shows it. Without JavaScript, each row has
-   Up and Down buttons that post a move. *)
+   Up and Down buttons that post a move. The image column uploads a new
+   image (picking a file posts it at once; without JavaScript, the Upload
+   button does), and a click on an uploaded image opens its delete dialog. *)
 
 let icon d =
   Yuka.element "svg"
@@ -13,9 +15,14 @@ let handle_icon =
   icon
     "M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"
 
+(* Material's cloud_upload icon. *)
+let upload_icon =
+  icon "M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"
+
 let up_icon = icon "M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"
 let down_icon = icon "M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"
 let handle_id id = "move-" ^ Int.to_string id
+let upload_id id = "upload-" ^ Int.to_string id
 
 (* [ids] with [id] at [index]. *)
 let place ids id index =
@@ -32,7 +39,7 @@ let index_of id ids =
    island starts. *)
 let refocus = ref None
 
-let[@client] make ~(apps : Model.app_row list) ~(image : string) () =
+let[@client] make ~(apps : Model.app_row list) () =
   let saved = List.map (fun (a : Model.app_row) -> a.id) apps in
   let order = Yuka.State.make saved in
   let started = Yuka.State.make false in
@@ -40,6 +47,17 @@ let[@client] make ~(apps : Model.app_row list) ~(image : string) () =
   let armed = Yuka.State.make None in
   let dragging = Yuka.State.make None in
   let failure = Yuka.State.make None in
+  (* The row whose image is uploading: picking a file posts its form at once. *)
+  let uploading = Yuka.State.make None in
+  let upload id _ =
+    Yuka.State.set uploading (Some id);
+    !Platform.upload (upload_id id) (function
+      | Some "/applications" -> Yuka.Browser.refresh ()
+      | Some url -> Yuka.Browser.navigate ~replace:true url
+      | None ->
+          Yuka.State.set uploading None;
+          Yuka.State.set failure (Some "The upload failed: try again"))
+  in
   Yuka.Effect.after (fun () ->
       Yuka.State.set started true;
       Option.iter (fun id -> Yuka.Browser.focus (handle_id id)) !refocus;
@@ -93,7 +111,7 @@ let[@client] make ~(apps : Model.app_row list) ~(image : string) () =
       <thead>
         <tr>
           <th><span class_="visually-hidden">"Order"</span></th>
-          <th>"Name"</th><th>"Description"</th><th>"Priority"</th><th>"Last used"</th><th>"Created"</th><th>"Token"</th><th />
+          <th>"Image"</th><th>"Name"</th><th>"Description"</th><th>"Priority"</th><th>"Last used"</th><th>"Created"</th><th>"Token"</th><th />
         </tr>
       </thead>
       <tbody>
@@ -124,7 +142,24 @@ let[@client] make ~(apps : Model.app_row list) ~(image : string) () =
                    </form>
                  </span>
                </td>
-               <td><span class_="name-cell"><img src=image alt="" width="32" height="32" />(Yuka.text a.name)</span></td>
+               <td class_=(if Yuka.State.get uploading = Some a.id then "image-cell uploading" else "image-cell")>
+                 (if a.custom_image then
+                    <a class_="app-image-link" href=(Routes.app_image_remove ~id:a.id ()) title="Delete image">
+                      <img src=a.image alt=("Delete the image of " ^ a.name) width="40" height="40" />
+                    </a>
+                  else <img src=a.image alt="" width="40" height="40" />)
+                 <form id=(upload_id a.id) method_=`post action=(Routes.app_image ~id:a.id ()) enctype=`multipart_form_data
+                   class_="upload-form">
+                   <label class_="icon-button upload-label" title="Upload image">
+                     upload_icon
+                     <span class_="visually-hidden">(Yuka.text ("Upload an image for " ^ a.name))</span>
+                     <input type_=`file name="file" accept=".gif,.png,.jpg,.jpeg" class_="visually-hidden"
+                       on_change=(upload a.id) />
+                   </label>
+                   <button type_=`submit class_="button text" hidden=(Yuka.State.get started)>"Upload"</button>
+                 </form>
+               </td>
+               <td><span class_="name-cell">(Yuka.text a.name)</span></td>
                <td>(Yuka.text a.description)</td>
                <td>(Yuka.int a.priority)</td>
                <td><time>(Yuka.text a.last_used)</time></td>

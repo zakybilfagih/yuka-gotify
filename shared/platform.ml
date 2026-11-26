@@ -39,6 +39,11 @@ let on_image_load : ((unit -> unit) -> unit -> unit) ref = ref (fun _ () -> ())
     in place of its theme class, at once. *)
 let set_theme : (string -> unit) ref = ref (fun _ -> ())
 
+(** [upload id k] posts the form with this id (with its files) and the
+    header Yuka-Upload, and gives [k] the text of the answer, or [None] when
+    the request fails. *)
+let upload : (string -> (string option -> unit) -> unit) ref = ref (fun _ k -> k None)
+
 (** How far the window is scrolled down, in CSS pixels. *)
 let scroll_y : (unit -> float) ref = ref (fun () -> 0.)
 

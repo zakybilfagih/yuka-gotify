@@ -20,6 +20,16 @@ let set_theme : string -> unit =
   [%mel.raw
     {|function (t) { document.querySelectorAll(".app").forEach(function (e) { e.className = e.className.replace(/\btheme-\w+/, "theme-" + t) }) }|}]
 
+let upload : string -> (string option -> unit) -> unit =
+  [%mel.raw
+    {|function (id, k) {
+  var f = document.getElementById(id);
+  if (!f) { k(undefined); return }
+  fetch(f.action, { method: "POST", body: new FormData(f), headers: { "Yuka-Upload": "1" }, credentials: "same-origin" })
+    .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status) })
+    .then(function (t) { k(t) }, function () { k(undefined) });
+}|}]
+
 let scroll_y : unit -> float = [%mel.raw {|function () { return window.scrollY }|}]
 let scroll_to_top : unit -> unit = [%mel.raw {|function () { window.scrollTo({ top: 0, behavior: "smooth" }) }|}]
 
@@ -78,6 +88,7 @@ let () =
   Platform.overflows := overflows;
   Platform.on_image_load := on_image_load;
   Platform.set_theme := set_theme;
+  Platform.upload := upload;
   Platform.scroll_y := scroll_y;
   Platform.scroll_to_top := scroll_to_top;
   Platform.start_drag := start_drag;

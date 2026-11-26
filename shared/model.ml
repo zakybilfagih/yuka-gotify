@@ -3,6 +3,7 @@ type message = {
   id : int;
   app_id : int;
   app_name : string;
+  image : string;  (** the URL of the app's image *)
   title : string;
   body : Markup.node list;
   markdown : bool;
@@ -20,8 +21,17 @@ type feed = { user : int; app : int option; pages : int } [@@deriving codec]
 type page = { messages : message list; more : bool } [@@deriving codec]
 
 (** An application in the drawer. *)
-type app_link = { id : int; name : string } [@@deriving codec]
+type app_link = { id : int; name : string; image : string } [@@deriving codec]
 
 (** A row of the Applications table. *)
-type app_row = { id : int; name : string; description : string; priority : int; last_used : string; created : string }
+type app_row = {
+  id : int;
+  name : string;
+  description : string;
+  priority : int;
+  last_used : string;
+  created : string;
+  image : string;  (** the URL of the app's image *)
+  custom_image : bool;  (** an uploaded image, which can be deleted *)
+}
 [@@deriving codec]

@@ -17,8 +17,8 @@ module T = struct
 
   let application =
     product
-      (fun id user_id token name description default_priority internal sort_key created_at last_used : application ->
-        { id; user_id; token; name; description; default_priority; internal; sort_key; created_at; last_used })
+      (fun id user_id token name description default_priority internal sort_key created_at last_used image : application ->
+        { id; user_id; token; name; description; default_priority; internal; sort_key; created_at; last_used; image })
     @@ proj int (fun (a : application) -> a.id)
     @@ proj int (fun (a : application) -> a.user_id)
     @@ proj string (fun (a : application) -> a.token)
@@ -29,6 +29,7 @@ module T = struct
     @@ proj string (fun (a : application) -> a.sort_key)
     @@ proj float (fun (a : application) -> a.created_at)
     @@ proj (option float) (fun (a : application) -> a.last_used)
+    @@ proj string (fun (a : application) -> a.image)
     @@ proj_end
 
   let client =
@@ -80,6 +81,7 @@ let schema =
         sort_key TEXT NOT NULL,
         created_at REAL NOT NULL,
         last_used REAL,
+        image TEXT NOT NULL DEFAULT '',
         UNIQUE (user_id, sort_key))|};
     {|CREATE TABLE IF NOT EXISTS clients (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -115,6 +117,16 @@ let use f =
 
 let foreign_keys = (T.unit ->. T.unit) "PRAGMA foreign_keys = ON"
 
+let q_has_image =
+  (T.unit ->! T.int) "SELECT COUNT(*) FROM pragma_table_info('applications') WHERE name = 'image'"
+
+let q_add_image = (T.unit ->. T.unit) "ALTER TABLE applications ADD COLUMN image TEXT NOT NULL DEFAULT ''"
+
+(* Databases made before application images have no image column. *)
+let migrate () =
+  use (fun (module C : Caqti_lwt.CONNECTION) ->
+      Lwt_result.bind (C.find q_has_image ()) (fun n -> if n = 0 then C.exec q_add_image () else Lwt_result.return ()))
+
 let connect path =
   let uri = Uri.make ~scheme:"sqlite3" ~path () in
   let post_connect (module C : Caqti_lwt.CONNECTION) = C.exec foreign_keys () in
@@ -122,9 +134,11 @@ let connect path =
   | Error e -> Lwt.fail_with (Caqti_error.show e)
   | Ok p ->
       pool := Some p;
-      Lwt_list.iter_s
-        (fun sql -> use (fun (module C : Caqti_lwt.CONNECTION) -> C.exec ((T.unit ->. T.unit) sql) ()))
-        schema
+      Lwt.bind
+        (Lwt_list.iter_s
+           (fun sql -> use (fun (module C : Caqti_lwt.CONNECTION) -> C.exec ((T.unit ->. T.unit) sql) ()))
+           schema)
+        migrate
 
 let now () = Unix.gettimeofday ()
 
@@ -157,12 +171,11 @@ let create_user ~name ~pass ~admin =
 let update_user (u : user) =
   use (fun (module C : Caqti_lwt.CONNECTION) -> C.exec q_update_user (u.name, u.pass, u.admin, u.id))
 
-let delete_user id = use (fun (module C : Caqti_lwt.CONNECTION) -> C.exec q_delete_user id)
 
 (* Applications *)
 
 let app_cols =
-  "id, user_id, token, name, description, default_priority, internal, sort_key, created_at, last_used"
+  "id, user_id, token, name, description, default_priority, internal, sort_key, created_at, last_used, image"
 
 let q_app_by_token = (T.string ->? T.application) ("SELECT " ^ app_cols ^ " FROM applications WHERE token = ?")
 let q_app_by_id = (T.int ->? T.application) ("SELECT " ^ app_cols ^ " FROM applications WHERE id = ?")
@@ -182,9 +195,11 @@ let q_update_app =
   (T.(t2 (t4 string string string int) (t2 string int)) ->. T.unit)
     "UPDATE applications SET token = ?, name = ?, description = ?, default_priority = ?, sort_key = ? WHERE id = ?"
 
+let q_set_app_image = (T.(t2 string int) ->. T.unit) "UPDATE applications SET image = ? WHERE id = ?"
 let q_app_used = (T.(t2 float int) ->. T.unit) "UPDATE applications SET last_used = ? WHERE id = ?"
 let q_delete_app = (T.int ->. T.unit) "DELETE FROM applications WHERE id = ?"
 
+let set_app_image id image = use (fun (module C : Caqti_lwt.CONNECTION) -> C.exec q_set_app_image (image, id))
 let app_by_token t = use (fun (module C : Caqti_lwt.CONNECTION) -> C.find_opt q_app_by_token t)
 let app_by_id id = use (fun (module C : Caqti_lwt.CONNECTION) -> C.find_opt q_app_by_id id)
 let apps_of_user uid = use (fun (module C : Caqti_lwt.CONNECTION) -> C.collect_list q_apps_of_user uid)
@@ -245,6 +260,7 @@ let create_app ~user_id ~name ~description ~default_priority ?sort_key token =
           sort_key;
           created_at;
           last_used = None;
+          image = "";
         })
 
 let update_app (a : application) =
@@ -252,7 +268,16 @@ let update_app (a : application) =
       C.exec q_update_app ((a.token, a.name, a.description, a.default_priority), (a.sort_key, a.id)))
 
 let app_used id = use (fun (module C : Caqti_lwt.CONNECTION) -> C.exec q_app_used (now (), id))
-let delete_app id = use (fun (module C : Caqti_lwt.CONNECTION) -> C.exec q_delete_app id)
+(** Deletes the application, its messages and its image file. *)
+let delete_app (a : application) =
+  Lwt.map (fun () -> Images.remove a.image) (use (fun (module C : Caqti_lwt.CONNECTION) -> C.exec q_delete_app a.id))
+
+(** Deletes the user, with their applications, clients and messages, and the image files of the applications. *)
+let delete_user id =
+  Lwt.bind (apps_of_user id) (fun apps ->
+      Lwt.map
+        (fun () -> List.iter (fun (a : application) -> Images.remove a.image) apps)
+        (use (fun (module C : Caqti_lwt.CONNECTION) -> C.exec q_delete_user id)))
 
 (* Clients *)
 

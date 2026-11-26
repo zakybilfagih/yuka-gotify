@@ -87,6 +87,44 @@ let reorder (s : Ui.session) ids =
   let own = List.sort compare (List.map (fun (a : M.application) -> a.id) s.apps) in
   if List.sort compare ids = own then Lwt.map (fun () -> true) (Db.reorder_apps s.user.id ids) else Lwt.return false
 
+(* The image of an application, the upload form of its row. Without
+   JavaScript it is a multipart post that answers 303; the island posts the
+   same form with fetch and the header Yuka-Upload, and gets the URL to go to
+   as text, which it navigates to. *)
+let app_image req ~id =
+  let answer path =
+    if Yuka.Server.Request.header req "yuka-upload" = Some "1" then Yuka.Server.text path else redirect path
+  in
+  let alert message = answer (Ui.with_alert "/applications" message) in
+  Yuka.Async.bind (Yuka_server.to_async (Ui.find req)) (function
+    | None -> redirect "/login"
+    | Some s -> (
+        match own_app s id with
+        | None -> alert "No such application"
+        | Some a ->
+            Yuka.Async.bind (Yuka.Server.Request.body req ~limit:Images.max_size) (function
+              | Error `Too_large -> alert "The image is too large: at most 10 MB"
+              | Ok body -> (
+                  let file =
+                    Option.bind (Option.bind (Yuka.Server.Request.header req "content-type") Http.boundary_of)
+                      (fun boundary ->
+                        List.find_map
+                          (fun (field, filename, data) -> if field = "file" then Some (filename, data) else None)
+                          (Http.files ~boundary body))
+                  in
+                  match file with
+                  | None | Some ("", _) -> alert "Choose an image to upload"
+                  | Some (filename, data) -> (
+                      match Images.save ~filename data with
+                      | Error "file must be an image" -> alert "That file is not an image"
+                      | Error _ -> alert "Upload a .png, .jpg, .jpeg or .gif image"
+                      | Ok name ->
+                          Ui.lwt
+                            (let* () = Db.set_app_image a.id name in
+                             Images.remove a.image;
+                             Stream.changed s.user.id;
+                             Lwt.return (answer "/applications")))))))
+
 (* Up or Down of an application, the form of the Applications page without
    JavaScript. *)
 let app_move req ~id =
@@ -124,7 +162,16 @@ let app_delete (s : Ui.session) id =
   | None -> alert "/applications" "No such application"
   | Some a when a.internal -> alert "/applications" "Cannot delete an internal application"
   | Some a ->
-      let* () = Db.delete_app a.id in
+      let* () = Db.delete_app a in
+      Stream.changed s.user.id;
+      go "/applications"
+
+let app_image_delete (s : Ui.session) id =
+  match own_app s id with
+  | None -> alert "/applications" "No such application"
+  | Some a ->
+      let* () = Db.set_app_image a.id "" in
+      Images.remove a.image;
       Stream.changed s.user.id;
       go "/applications"
 
@@ -282,10 +329,13 @@ let register () =
             Yuka.Async.bind (Yuka_server.to_async (reorder s ids)) (fun ok ->
                 if ok then Yuka.Async.return () else Yuka.Server.Action.reject "The applications changed: reload the page")));
   Yuka.Server.Form.implement A.confirm ~redirect:Fun.id (fun req { target; elevate_pass } ->
-      elevated req elevate_pass (fun s ->
+      (* Gotify lets any client change an image; the others need an elevated session. *)
+      let session f = match target with App_image_delete _ -> signed req f | _ -> elevated req elevate_pass f in
+      session (fun s ->
           match target with
           | App_token id -> app_rotate s id
           | App_delete id -> app_delete s id
+          | App_image_delete id -> app_image_delete s id
           | Client_delete id -> client_delete s id
           | User_delete id -> admin_only s (fun s -> user_delete s id)));
   Yuka.Server.Form.implement A.user_edit ~redirect:Fun.id (fun req (form : A.user_edit) ->

@@ -8,11 +8,12 @@ let ping = Yuka.Action.query ~name:"ping" ~input:Yuka.Codec.unit ~output:Yuka.Co
 
 (** What a confirm dialog does; the hidden [target] field of its form. *)
 module Target = struct
-  type t = App_delete of int | App_token of int | Client_delete of int | User_delete of int
+  type t = App_delete of int | App_token of int | App_image_delete of int | Client_delete of int | User_delete of int
 
   let to_string = function
     | App_delete id -> "app-delete:" ^ Int.to_string id
     | App_token id -> "app-token:" ^ Int.to_string id
+    | App_image_delete id -> "app-image-delete:" ^ Int.to_string id
     | Client_delete id -> "client-delete:" ^ Int.to_string id
     | User_delete id -> "user-delete:" ^ Int.to_string id
 
@@ -22,6 +23,7 @@ module Target = struct
         match (kind, int_of_string_opt id) with
         | "app-delete", Some id -> Some (App_delete id)
         | "app-token", Some id -> Some (App_token id)
+        | "app-image-delete", Some id -> Some (App_image_delete id)
         | "client-delete", Some id -> Some (Client_delete id)
         | "user-delete", Some id -> Some (User_delete id)
         | _ -> None)

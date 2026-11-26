@@ -31,7 +31,7 @@ let parse_urlencoded s =
 let query reqd = parse_urlencoded (snd (path_and_query reqd))
 let limit = 1 lsl 20
 
-let read_body reqd =
+let read_body ?(limit = limit) reqd =
   let reader = Reqd.request_body reqd in
   match Ache.Request.body_length (request reqd) with
   | `Fixed 0L -> Ache.Body.Reader.close reader; Lwt.return (Ok "")
@@ -57,13 +57,33 @@ let read_body reqd =
       next ();
       p
 
-(* multipart/form-data: text fields only (Gotify's image upload is out of scope). *)
+(* multipart/form-data: each part as its name, the filename of a file part,
+   and its value. *)
 let parse_multipart ~boundary body =
   let delimiter = "--" ^ boundary in
   let find s sub from =
     let n = String.length s and m = String.length sub in
-    let rec go i = if i + m > n then None else if String.sub s i m = sub then Some i else go (i + 1) in
+    let rec matches i k = k = m || (s.[i + k] = sub.[k] && matches i (k + 1)) in
+    let rec go i = if i + m > n then None else if matches i 0 then Some i else go (i + 1) in
     go from
+  in
+  (* The parameters of the Content-Disposition line of a part's head, by exact key. *)
+  let disposition head =
+    List.concat_map
+      (fun line ->
+        let line = String.trim line in
+        if String.starts_with ~prefix:"content-disposition:" (String.lowercase_ascii line) then
+          List.filter_map
+            (fun p ->
+              match String.index_opt p '=' with
+              | Some i ->
+                  let v = String.trim (String.sub p (i + 1) (String.length p - i - 1)) in
+                  let v = if String.length v >= 2 && v.[0] = '"' then String.sub v 1 (String.length v - 2) else v in
+                  Some (String.lowercase_ascii (String.trim (String.sub p 0 i)), v)
+              | None -> None)
+            (String.split_on_char ';' line)
+        else [])
+      (String.split_on_char '\n' head)
   in
   let rec parts from acc =
     match find body delimiter from with
@@ -75,34 +95,38 @@ let parse_multipart ~boundary body =
           match find body delimiter start with
           | None -> List.rev acc
           | Some j ->
-              let part = String.sub body start (j - start) in
               let acc =
-                match find part "\r\n\r\n" 0 with
-                | None -> acc
-                | Some h ->
-                    let head = String.lowercase_ascii (String.sub part 0 h) in
-                    let value = String.sub part (h + 4) (String.length part - h - 4) in
-                    let value =
-                      if String.ends_with ~suffix:"\r\n" value then String.sub value 0 (String.length value - 2)
-                      else value
-                    in
-                    let name =
-                      match find head "name=\"" 0 with
-                      | None -> None
-                      | Some k -> (
-                          let k = k + 6 in
-                          match String.index_from_opt head k '"' with
-                          | Some e ->
-                              (* the original case of the name *)
-                              Some (String.sub (String.sub part 0 h) k (e - k))
-                          | None -> None)
-                    in
-                    let is_file = Option.is_some (find head "filename=" 0) in
-                    (match name with Some n when not is_file -> (n, value) :: acc | _ -> acc)
+                match find body "\r\n\r\n" start with
+                | Some h when h < j -> (
+                    let head = String.sub body start (h - start) in
+                    let stop = if j >= 2 && String.sub body (j - 2) 2 = "\r\n" then j - 2 else j in
+                    let value = String.sub body (h + 4) (max 0 (stop - h - 4)) in
+                    let params = disposition head in
+                    match List.assoc_opt "name" params with
+                    | Some name -> (name, List.assoc_opt "filename" params, value) :: acc
+                    | None -> acc)
+                | _ -> acc
               in
               parts j acc)
   in
   parts 0 []
+
+(** The boundary of a multipart/form-data Content-Type. *)
+let boundary_of content_type =
+  if not (String.starts_with ~prefix:"multipart/form-data" (String.lowercase_ascii content_type)) then None
+  else
+    List.find_map
+      (fun p ->
+        let p = String.trim p in
+        if String.starts_with ~prefix:"boundary=" (String.lowercase_ascii p) then
+          let b = String.sub p 9 (String.length p - 9) in
+          Some (if String.length b >= 2 && b.[0] = '"' then String.sub b 1 (String.length b - 2) else b)
+        else None)
+      (List.tl (String.split_on_char ';' content_type))
+
+(** The file parts of a multipart body, as [(field, filename, data)]. *)
+let files ~boundary body =
+  List.filter_map (fun (name, filename, value) -> Option.map (fun f -> (name, f, value)) filename) (parse_multipart ~boundary body)
 
 type body = Params of (string * string) list | Json of Yojson.Safe.t
 
@@ -120,21 +144,15 @@ let body reqd =
               try Ok (Json (Yojson.Safe.from_string (if text = "" then "{}" else text)))
               with Yojson.Json_error m -> Error (`Json m))
           | Some ct when String.starts_with ~prefix:"multipart/form-data" ct ->
-              let boundary =
-                match String.split_on_char ';' (Option.get (header reqd "content-type")) with
-                | _ :: params ->
-                    List.find_map
-                      (fun p ->
-                        let p = String.trim p in
-                        if String.starts_with ~prefix:"boundary=" (String.lowercase_ascii p) then
-                          let b = String.sub p 9 (String.length p - 9) in
-                          Some
-                            (if String.length b >= 2 && b.[0] = '"' then String.sub b 1 (String.length b - 2) else b)
-                        else None)
-                      params
-                | [] -> None
+              let fields =
+                match Option.bind (header reqd "content-type") boundary_of with
+                | Some b ->
+                    List.filter_map
+                      (function name, None, value -> Some (name, value) | _, Some _, _ -> None)
+                      (parse_multipart ~boundary:b text)
+                | None -> []
               in
-              Ok (Params (q @ match boundary with Some b -> parse_multipart ~boundary:b text | None -> []))
+              Ok (Params (q @ fields))
           | _ -> Ok (Params (q @ parse_urlencoded text))))
     (read_body reqd)
 

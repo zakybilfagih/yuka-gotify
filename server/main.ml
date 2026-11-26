@@ -4,7 +4,7 @@
 let read file = In_channel.with_open_bin file In_channel.input_all
 
 let usage =
-  "gotify-yuka [--port N] [--interface IP] [--db FILE] [--secure]\n\
+  "gotify-yuka [--port N] [--interface IP] [--db FILE] [--images DIR] [--secure]\n\
    Environment: YUKA_SECRET (at least 32 bytes, required), GOTIFY_DEFAULTUSER_NAME,\n\
    GOTIFY_DEFAULTUSER_PASS, GOTIFY_REGISTRATION=true"
 
@@ -15,6 +15,7 @@ let () =
       ("--port", Arg.Set_int port, "PORT to listen on (default 8080)");
       ("--interface", Arg.Set_string interface, "IP to listen on (default 127.0.0.1)");
       ("--db", Arg.Set_string db, "FILE of the SQLite database (default gotify.db)");
+      ("--images", Arg.Set_string Gotify_core.Images.dir, "DIR of the uploaded application images (default images)");
       ("--root", Arg.Set_string root, "DIR of the project, with _build and static (default .)");
       ("--secure", Arg.Set Ui.secure, " the site is on HTTPS: secure cookies");
     ]
@@ -28,6 +29,7 @@ let () =
         exit 1
   in
   Mirage_crypto_rng_unix.use_default ();
+  (try Sys.mkdir !Gotify_core.Images.dir 0o755 with Sys_error _ when Sys.file_exists !Gotify_core.Images.dir -> ());
   Gotify_core.Api.registration := Sys.getenv_opt "GOTIFY_REGISTRATION" = Some "true";
   let file path = Filename.concat !root path in
   let dev = Sys.getenv_opt "YUKA_DEV" = Some "1" in

@@ -273,6 +273,56 @@ let stream () =
   | `Text t -> Alcotest.fail ("expected the socket of a deleted client to close, got " ^ t));
   run (Lwt_unix.close fd)
 
+(* A multipart body with one part, as curl -F sends it. *)
+let multipart ?(field = "file") ~filename data =
+  let boundary = "----gotifytest" in
+  ( ("content-type", "multipart/form-data; boundary=" ^ boundary),
+    Printf.sprintf "--%s\r\nContent-Disposition: form-data; name=\"%s\"; filename=\"%s\"\r\nContent-Type: application/octet-stream\r\n\r\n%s\r\n--%s--\r\n"
+      boundary field filename data boundary )
+
+let upload ?(auth = admin) ?field ~filename data id =
+  let ct, body = multipart ?field ~filename data in
+  run (request ~headers:[ auth; ct ] ~body "POST" (Printf.sprintf "/application/%d/image" id))
+
+let images () =
+  let id, _ = create_app "Pictures" in
+  let error what code description r =
+    status what code r;
+    Alcotest.(check string) what description (str (json r) "errorDescription")
+  in
+  (* A PNG signature, then bytes that look like the end of a part. *)
+  let png = "\x89PNG\r\n\x1a\nbody\r\n--not-the-boundary\r\n" in
+  error "no file field" 400 "file with key 'file' must be present" (upload ~field:"other" ~filename:"a.png" png id);
+  error "not an image" 400 "file must be an image" (upload ~filename:"a.png" "hello" id);
+  error "bad extension" 400 "invalid file extension" (upload ~filename:"a.svg" png id);
+  error "no custom image to delete" 400
+    (Printf.sprintf "app with id %d does not have a customized image" id)
+    (call ~auth:admin "DELETE" (Printf.sprintf "/application/%d/image" id));
+  create_user "painter" "painter";
+  status "another user's app" 404 (upload ~auth:(basic "painter" "painter") ~filename:"a.png" png id);
+  let r = upload ~filename:"Logo.PNG" png id in
+  status "upload" 200 r;
+  let first = str (json r) "image" in
+  Alcotest.(check bool) ("image path " ^ first) true (String.starts_with ~prefix:"image/" first && String.ends_with ~suffix:".png" first);
+  let served = call "GET" ("/" ^ first) in
+  status "served without auth" 200 served;
+  Alcotest.(check string) "same bytes" png served.body;
+  let listed = List.find (fun a -> int a "id" = id) J.(to_list (json (call ~auth:admin "GET" "/application"))) in
+  Alcotest.(check string) "listed" first (str listed "image");
+  let r = upload ~filename:"photo.jpg" "\xff\xd8\xffjpeg" id in
+  status "replace" 200 r;
+  let second = str (json r) "image" in
+  status "the old image is gone" 404 (call "GET" ("/" ^ first));
+  let r = call ~auth:admin "DELETE" (Printf.sprintf "/application/%d/image" id) in
+  status "delete" 200 r;
+  Alcotest.(check string) "default image" "static/defaultapp.png" (str (json r) "image");
+  status "the deleted image is gone" 404 (call "GET" ("/" ^ second));
+  let r = upload ~filename:"again.gif" "GIF89a..." id in
+  let third = str (json r) "image" in
+  status "delete the app" 200 (call ~auth:admin "DELETE" (Printf.sprintf "/application/%d" id));
+  status "its image is gone" 404 (call "GET" ("/" ^ third));
+  status "no path traversal" 404 (call "GET" "/image/..%2f..%2fetc%2fpasswd.png")
+
 let last_admin () =
   let me = int (json (call ~auth:admin "GET" "/current/user")) "id" in
   let r = call ~auth:admin "DELETE" (Printf.sprintf "/user/%d" me) in
@@ -285,6 +335,7 @@ let last_admin () =
 let () =
   Mirage_crypto_rng_unix.use_default ();
   let db = Filename.temp_file "gotify-test" ".db" in
+  Images.dir := Filename.temp_dir "gotify-test" "images";
   Lwt_main.run (Db.connect db >>= fun () -> Api.create_default_user ~name:"admin" ~pass:"admin");
   let ready, wake = Lwt.wait () in
   Lwt.async (fun () ->
@@ -307,6 +358,7 @@ let () =
           test "users see only their own data" ownership;
           test "elevated sessions" elevation;
           test "stream delivers and closes" stream;
+          test "application images" images;
           test "the last admin stays" last_admin;
         ] );
     ]

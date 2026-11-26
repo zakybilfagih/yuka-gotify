@@ -25,7 +25,7 @@ let arrow_up =
 let undo_ms = 5000
 let body_id id = "message-body-" ^ Int.to_string id
 
-let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string) ~(image : string) () =
+let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string) () =
   let live = Yuka.Live.make Topics.messages (fun () -> feed) in
   let page () =
     Option.value (Yuka.Status.data (Yuka.State.get (Yuka.Live.state live))) ~default:initial
@@ -185,7 +185,7 @@ let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string)
          (fun () -> Array.of_list (messages ()))
          (fun (m : Model.message) ->
            <li class_="card message" data_priority=(Int.to_string m.priority)>
-             <img class_="app-image" src=image alt="" width="70" height="70" />
+             <img class_="app-image" src=m.image alt="" width="70" height="70" />
              <div class_="message-main">
                <div class_="message-head">
                  <div class_="message-heading">
