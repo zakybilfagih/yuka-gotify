@@ -63,6 +63,14 @@ let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string)
     let pages = feed.pages + 1 in
     match feed.app with None -> Routes.messages ~pages () | Some app -> Routes.app_messages ~app ~pages ()
   in
+  (* Without JavaScript, Load more is a full page load, which starts at the
+     top: its link ends with #page-N, the id of the first message of the next
+     page, so the browser scrolls to where the new messages begin. *)
+  let page_starts () =
+    List.filteri (fun i _ -> i > 0 && i mod Topics.per_page = 0) (page ()).messages
+    |> List.mapi (fun k (m : Model.message) -> (m.id, "page-" ^ Int.to_string (k + 2)))
+  in
+  let load_more = next ^ "#page-" ^ Int.to_string (feed.pages + 1) in
   Yuka.Effect.after ~cleanup:(fun stop -> stop ()) (fun () ->
       if (page ()).more then
         Yuka.Browser.on_visible "next-page" (fun () -> Yuka.Browser.navigate ~replace:true ~keep_scroll:true next)
@@ -197,7 +205,7 @@ let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string)
          ~key:(fun (m : Model.message) -> Int.to_string m.id)
          (fun () -> Array.of_list (messages ()))
          (fun (m : Model.message) ->
-           <li class_="card message" data_priority=(Int.to_string m.priority)>
+           <li class_="card message" id=(Option.value (List.assoc_opt m.id (page_starts ())) ~default:("message-" ^ Int.to_string m.id)) data_priority=(Int.to_string m.priority)>
              <img class_="app-image" src=m.image alt="" width="70" height="70" />
              <div class_="message-main">
                <div class_="message-head">
@@ -233,7 +241,7 @@ let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string)
       hidden=(not (Yuka.State.get scrolled)) on_click=to_top>
       arrow_up
     </a>
-    <a id="next-page" class_="button outlined load-more" href=next data_yuka_replace="" data_yuka_keep_scroll=""
+    <a id="next-page" class_="button outlined load-more" href=load_more data_yuka_replace="" data_yuka_keep_scroll=""
       hidden=(not (page ()).more)>
       (Yuka.text (if Yuka.State.get Yuka.Browser.navigating then "Loading..." else "Load more"))
     </a>

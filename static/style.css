@@ -137,6 +137,8 @@ body {
 
 /* Messages */
 .message-list { list-style: none; margin: 0; padding: 0; }
+/* A #page-N link lands below the sticky app bar. */
+.message-list > li { scroll-margin-top: 80px; }
 .message {
   display: flex; gap: 15px; padding: 16px 20px; margin-bottom: 16px;
   border-left: 6px solid transparent;
