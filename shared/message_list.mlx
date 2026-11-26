@@ -130,6 +130,17 @@ let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string)
     Hashtbl.reset timers;
     Yuka.State.set pending []
   in
+  (* The page unloads (a reload, closing the tab, a full page load): the
+     cleanup below does not run then, so send the waiting deletes in requests
+     that outlive the page. *)
+  Yuka.Effect.after (fun () ->
+      Yuka.Browser.on_window "pagehide" (fun _ ->
+          Hashtbl.iter
+            (fun id cancel ->
+              cancel ();
+              !Platform.send_action "delete_message" (Int.to_string id))
+            timers;
+          Hashtbl.reset timers));
   (* The list goes away: delete the waiting messages now. *)
   Yuka.Effect.after
     ~cleanup:(fun () ->

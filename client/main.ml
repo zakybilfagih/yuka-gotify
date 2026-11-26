@@ -30,6 +30,10 @@ let upload : string -> (string option -> unit) -> unit =
     .then(function (t) { k(t) }, function () { k(undefined) });
 }|}]
 
+let send_action : string -> string -> unit =
+  [%mel.raw
+    {|function (name, input) { fetch("/_yuka/action/" + encodeURIComponent(name), { method: "POST", headers: { "Content-Type": "application/json" }, body: input, keepalive: true, credentials: "same-origin" }).catch(function () {}) }|}]
+
 let scroll_y : unit -> float = [%mel.raw {|function () { return window.scrollY }|}]
 let scroll_to_top : unit -> unit = [%mel.raw {|function () { window.scrollTo({ top: 0, behavior: "smooth" }) }|}]
 
@@ -89,6 +93,7 @@ let () =
   Platform.on_image_load := on_image_load;
   Platform.set_theme := set_theme;
   Platform.upload := upload;
+  Platform.send_action := send_action;
   Platform.scroll_y := scroll_y;
   Platform.scroll_to_top := scroll_to_top;
   Platform.start_drag := start_drag;

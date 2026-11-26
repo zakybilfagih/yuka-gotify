@@ -44,6 +44,11 @@ let set_theme : (string -> unit) ref = ref (fun _ -> ())
     the request fails. *)
 let upload : (string -> (string option -> unit) -> unit) ref = ref (fun _ k -> k None)
 
+(** [send_action name input] posts an action as Yuka's transport does (JSON
+    to /_yuka/action/NAME), with [keepalive], so the browser sends it even
+    while the page unloads; the answer is ignored. *)
+let send_action : (string -> string -> unit) ref = ref (fun _ _ -> ())
+
 (** How far the window is scrolled down, in CSS pixels. *)
 let scroll_y : (unit -> float) ref = ref (fun () -> 0.)
 
