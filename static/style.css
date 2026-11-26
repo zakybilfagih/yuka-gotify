@@ -233,6 +233,9 @@ td.actions { width: 1%; padding-left: 0; padding-right: 8px; }
 .field input[aria-invalid="true"] { border-bottom-color: var(--danger); }
 .row select { border: 1px solid var(--divider); border-radius: 4px; padding: 6px 8px; }
 .check { display: flex; align-items: center; gap: 8px; }
+/* In line with the fields, a little apart from the underline above. */
+.check input[type="checkbox"] { margin: 0; }
+.stack-plain > .check { margin-top: 4px; }
 .choices { border: 0; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .choices legend { font-size: 13px; color: var(--muted); margin-bottom: 6px; padding: 0; }
 .alert {
