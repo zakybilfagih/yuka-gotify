@@ -359,6 +359,47 @@ let app_push_view ~(session : Ui.session) ~app =
             <Push_form app name=a.name priority=a.default_priority>actions</Push_form>
           </Yuka.Client> )
 
+(* Delete all: Gotify asks first, without a password. [app]: [None] for every
+   message of the user. *)
+let messages_remove_view ~(session : Ui.session) ~app =
+  let confirm text actions =
+      <Yuka.Client>
+        <Confirm_form target=(Actions.Target.to_string (Messages_delete app)) text button="Delete" danger=true user=None>actions</Confirm_form>
+      </Yuka.Client>
+  in
+  match app with
+  | None -> ("Delete all messages", Routes.messages (), confirm "Every message of every application is deleted.")
+  | Some id -> (
+      let back = Routes.app_messages ~app:id () in
+      match find_app session id with
+      | None -> missing back
+      | Some a -> ("Delete all messages of " ^ a.name, back, confirm "Every message of this application is deleted."))
+
+(* Delete of one message: with JavaScript the list deletes it with an Undo, so
+   only a page without it opens this dialog. [back]: the list to go back to. *)
+let message_remove_view ~(message : M.message option) ~back =
+  let back = Ui.safe_next back in
+  match message with
+  | None -> missing back
+  | Some m ->
+      ( "Delete " ^ (if m.title = "" then "the message" else m.title),
+        back,
+        fun cancel ->
+          <form method_=`post action=(Routes.message_delete ~id:m.id ())>
+            <input type_=`hidden name="next" value=back />
+            <p>"The message is deleted."</p>
+            <div class_="dialog-actions">cancel (submit ~class_:"button contained danger" "Delete")</div>
+          </form> )
+
+let message_remove ~session ~message ~id:_ ~back ~alert () = dialog Page ~session ~alert (message_remove_view ~message ~back)
+
+let messages_remove ~session ~alert () = dialog Page ~session ~alert (messages_remove_view ~session ~app:None)
+let messages_remove_dialog ~session ~alert () = dialog Overlay ~session ~alert (messages_remove_view ~session ~app:None)
+let app_messages_remove ~session ~app ~alert () = dialog Page ~session ~alert (messages_remove_view ~session ~app:(Some app))
+
+let app_messages_remove_dialog ~session ~app ~alert () =
+  dialog Overlay ~session ~alert (messages_remove_view ~session ~app:(Some app))
+
 let app_push ~session ~app ~alert () = dialog Page ~session ~alert (app_push_view ~session ~app)
 let app_push_dialog ~session ~app ~alert () = dialog Overlay ~session ~alert (app_push_view ~session ~app)
 let app_new ~session ~alert () = dialog Page ~session ~alert app_new_view

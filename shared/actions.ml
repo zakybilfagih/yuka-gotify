@@ -1,14 +1,18 @@
 let delete_message = Yuka.Action.mutation ~name:"delete_message" ~input:Yuka.Codec.int ~output:Yuka.Codec.unit
 
-(** [None]: every message of the user; [Some app]: those of one app. *)
-let delete_all = Yuka.Action.mutation ~name:"delete_all" ~input:(Yuka.Codec.option Yuka.Codec.int) ~output:Yuka.Codec.unit
-
 (** Whether the server answers, before the message list loads the page again. *)
 let ping = Yuka.Action.query ~name:"ping" ~input:Yuka.Codec.unit ~output:Yuka.Codec.unit
 
 (** What a confirm dialog does; the hidden [target] field of its form. *)
 module Target = struct
-  type t = App_delete of int | App_token of int | App_image_delete of int | Client_delete of int | User_delete of int
+  (** [Messages_delete]: every message of the user ([None]) or of one app. *)
+  type t =
+    | App_delete of int
+    | App_token of int
+    | App_image_delete of int
+    | Client_delete of int
+    | User_delete of int
+    | Messages_delete of int option
 
   let to_string = function
     | App_delete id -> "app-delete:" ^ Int.to_string id
@@ -16,6 +20,8 @@ module Target = struct
     | App_image_delete id -> "app-image-delete:" ^ Int.to_string id
     | Client_delete id -> "client-delete:" ^ Int.to_string id
     | User_delete id -> "user-delete:" ^ Int.to_string id
+    | Messages_delete None -> "messages-delete:all"
+    | Messages_delete (Some app) -> "messages-delete:" ^ Int.to_string app
 
   let of_string s =
     match String.split_on_char ':' s with
@@ -26,6 +32,8 @@ module Target = struct
         | "app-image-delete", Some id -> Some (App_image_delete id)
         | "client-delete", Some id -> Some (Client_delete id)
         | "user-delete", Some id -> Some (User_delete id)
+        | "messages-delete", Some app -> Some (Messages_delete (Some app))
+        | "messages-delete", None when id = "all" -> Some (Messages_delete None)
         | _ -> None)
     | _ -> None
 end

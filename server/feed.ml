@@ -73,15 +73,4 @@ let register () =
                  let* () = Db.delete_message id in
                  Stream.changed s.user.id;
                  Lwt.return_unit
-             | _ -> Lwt.return_unit)));
-  Yuka.Server.Action.implement S.Actions.delete_all (fun req app ->
-      Yuka.Async.bind (session req) (fun (s : Ui.session) ->
-          Yuka_server.to_async
-            (let* () =
-               match app with
-               | None -> Db.delete_user_messages s.user.id
-               | Some id when List.exists (fun (a : Model.application) -> a.id = id) s.apps -> Db.delete_app_messages id
-               | Some _ -> Lwt.return_unit
-             in
-             Stream.changed s.user.id;
-             Lwt.return_unit)))
+             | _ -> Lwt.return_unit)))

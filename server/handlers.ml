@@ -127,6 +127,21 @@ let app_image req ~id =
 
 (* Up or Down of an application, the form of the Applications page without
    JavaScript. *)
+(* The Delete of a message without JavaScript, from its confirm dialog: back to
+   the list it was opened from ([next]). *)
+let message_delete req ~id =
+  Ui.posted req (fun s fields ->
+      Ui.lwt
+        (let* m = Db.message_by_id id in
+         let* () =
+           match m with
+           | Some m when List.exists (fun (a : M.application) -> a.id = m.app_id) s.apps ->
+               let* () = Db.delete_message id in
+               Lwt.return (Stream.changed s.user.id)
+           | _ -> Lwt.return_unit
+         in
+         Lwt.return (redirect (Ui.safe_next (List.assoc_opt "next" fields)))))
+
 let app_move req ~id =
   Ui.posted req (fun s fields ->
       let ids = List.map (fun (a : M.application) -> a.id) s.apps in
@@ -174,6 +189,20 @@ let app_image_delete (s : Ui.session) id =
       Images.remove a.image;
       Stream.changed s.user.id;
       go "/applications"
+
+let messages_delete (s : Ui.session) app =
+  match app with
+  | None ->
+      let* () = Db.delete_user_messages s.user.id in
+      Stream.changed s.user.id;
+      go (Routes.messages ())
+  | Some id -> (
+      match own_app s id with
+      | None -> alert "/" "No such application"
+      | Some a ->
+          let* () = Db.delete_app_messages a.id in
+          Stream.changed s.user.id;
+          go (Routes.app_messages ~app:a.id ()))
 
 let client_delete (s : Ui.session) id =
   let* c = own_client s id in
@@ -330,12 +359,15 @@ let register () =
                 if ok then Yuka.Async.return () else Yuka.Server.Action.reject "The applications changed: reload the page")));
   Yuka.Server.Form.implement A.confirm ~redirect:Fun.id (fun req { target; elevate_pass } ->
       (* Gotify lets any client change an image; the others need an elevated session. *)
-      let session f = match target with App_image_delete _ -> signed req f | _ -> elevated req elevate_pass f in
+      let session f =
+        match target with App_image_delete _ | Messages_delete _ -> signed req f | _ -> elevated req elevate_pass f
+      in
       session (fun s ->
           match target with
           | App_token id -> app_rotate s id
           | App_delete id -> app_delete s id
           | App_image_delete id -> app_image_delete s id
+          | Messages_delete app -> messages_delete s app
           | Client_delete id -> client_delete s id
           | User_delete id -> admin_only s (fun s -> user_delete s id)));
   Yuka.Server.Form.implement A.user_edit ~redirect:Fun.id (fun req (form : A.user_edit) ->

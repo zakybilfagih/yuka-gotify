@@ -121,7 +121,8 @@ let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string)
       report;
     Yuka.State.update pending (List.filter (( <> ) id))
   in
-  let delete (id : int) _ =
+  let delete (id : int) event =
+    Yuka.Event.prevent_default event;
     Yuka.State.update pending (fun ids -> id :: ids);
     Hashtbl.replace timers id (!Platform.after undo_ms (fun () -> commit id))
   in
@@ -151,12 +152,14 @@ let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string)
         timers;
       Hashtbl.reset timers)
     (fun () -> ());
-  let delete_all _ =
-    if Yuka.Browser.confirm "Delete all messages?" then
-      Yuka.Async.on_result
-        (Yuka.Live.optimistic live ~change:(fun _ -> { Model.messages = []; more = false }) (fun () -> Yuka.Action.call Actions.delete_all feed.app))
-        report
+  (* Without JavaScript the Delete of a message opens a confirm dialog, which
+     goes back here. *)
+  let here =
+    match feed.app with
+    | None -> Routes.messages ~pages:feed.pages ()
+    | Some app -> Routes.app_messages ~app ~pages:feed.pages ()
   in
+  let delete_all = match feed.app with None -> Routes.messages_remove () | Some app -> Routes.app_messages_remove ~app () in
   <section class_="messages">
     <header class_="page-header">
       <h1>(Yuka.text title)</h1>
@@ -164,9 +167,8 @@ let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string)
         (match feed.app with
          | Some app -> <a class_="button contained" href=(Routes.app_push ~app ())>"Push message"</a>
          | None -> Yuka.empty)
-        <button type_=`button class_="button outlined" disabled=(messages () = []) on_click=delete_all>
-          "Delete all"
-        </button>
+        (if messages () = [] then <button type_=`button class_="button outlined" disabled=true>"Delete all"</button>
+         else <a class_="button outlined" href=delete_all>"Delete all"</a>)
       </div>
     </header>
     <div class_="card banner" role=`status hidden=(not (disconnected ()))>
@@ -204,10 +206,10 @@ let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string)
                    <span class_="message-app">(Yuka.text m.app_name)</span>
                  </div>
                  <time class_="message-date" title=m.date>(Yuka.text (Time_ago.text ~now:(Yuka.State.get clock) m.time))</time>
-                 <button type_=`button class_="icon-button" aria_label="Delete message" title="Delete"
-                   on_click=(delete m.id)>
+                 <a class_="icon-button" href=(Routes.message_remove ~id:m.id ~back:here ()) aria_label="Delete message"
+                   title="Delete" on_click=(delete m.id)>
                    trash
-                 </button>
+                 </a>
                </div>
                <div id=(body_id m.id)
                  class_=(String.concat " "
