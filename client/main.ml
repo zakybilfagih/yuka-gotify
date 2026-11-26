@@ -16,6 +16,10 @@ let on_image_load : (unit -> unit) -> unit -> unit =
   [%mel.raw
     {|function (f) { var h = function (e) { if (e.target && e.target.tagName === "IMG") f() }; document.addEventListener("load", h, true); return function () { document.removeEventListener("load", h, true) } }|}]
 
+let set_theme : string -> unit =
+  [%mel.raw
+    {|function (t) { document.querySelectorAll(".app").forEach(function (e) { e.className = e.className.replace(/\btheme-\w+/, "theme-" + t) }) }|}]
+
 let scroll_y : unit -> float = [%mel.raw {|function () { return window.scrollY }|}]
 let scroll_to_top : unit -> unit = [%mel.raw {|function () { window.scrollTo({ top: 0, behavior: "smooth" }) }|}]
 
@@ -73,6 +77,7 @@ let () =
   Platform.after := after;
   Platform.overflows := overflows;
   Platform.on_image_load := on_image_load;
+  Platform.set_theme := set_theme;
   Platform.scroll_y := scroll_y;
   Platform.scroll_to_top := scroll_to_top;
   Platform.start_drag := start_drag;

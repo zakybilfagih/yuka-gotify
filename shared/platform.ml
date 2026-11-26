@@ -35,6 +35,10 @@ let overflows : (string -> bool) ref = ref (fun _ -> false)
     loading, and gives the function that stops it. *)
 let on_image_load : ((unit -> unit) -> unit -> unit) ref = ref (fun _ () -> ())
 
+(** [set_theme t] gives each [.app] element of the page the class [theme-t]
+    in place of its theme class, at once. *)
+let set_theme : (string -> unit) ref = ref (fun _ -> ())
+
 (** How far the window is scrolled down, in CSS pixels. *)
 let scroll_y : (unit -> float) ref = ref (fun () -> 0.)
 
