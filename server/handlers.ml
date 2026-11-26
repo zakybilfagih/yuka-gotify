@@ -18,13 +18,16 @@ let login req =
          | None -> Lwt.return (redirect "/login?failed=true")
          | Some u ->
              let public, _secret = Token.client () in
+             (* As Gotify, the client expires after 7 days without use, and
+                each use moves that on (Ui.find). The cookie keeps as long as
+                a browser keeps one (400 days), so the client's expiry decides. *)
              let* c =
                Db.create_client ~user_id:u.id ~name:"Gotify web (Yuka)"
-                 ~elevated_until:(Unix.gettimeofday () +. elevation) ~expires_after:(30 * 24 * 3600) public
+                 ~elevated_until:(Unix.gettimeofday () +. elevation) ~expires_after:(7 * 24 * 3600) public
              in
              let cookie =
                Yuka_server.Signed_cookie.set (Ui.the_sessions ()) ~secure:!Ui.secure ~same_site:`Lax
-                 ~max_age:(30 * 24 * 3600) Ui.cookie_name (string_of_int c.id)
+                 ~max_age:(400 * 24 * 3600) Ui.cookie_name (string_of_int c.id)
              in
              Lwt.return (match cookie with Ok h -> redirect ~headers:[ h ] "/" | Error m -> Yuka.Server.text ~status:500 m)))
 
