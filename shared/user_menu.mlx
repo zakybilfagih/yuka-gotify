@@ -1,0 +1,29 @@
+(* The user menu of the app bar, as Gotify's: the user's name, which opens
+   the children (the theme toggle, Settings and Logout). A <details>, so it
+   opens and closes without JavaScript too. With it, the island owns the
+   open state, and closes the menu on a click on an item, on Escape, and on
+   a click outside: a transparent backdrop, as Material UI's menus have,
+   which shows only then, so that without JavaScript it never blocks the
+   page. *)
+
+let[@client] make ~(name : string) ~children () =
+  let shown = Yuka.State.make false in
+  Yuka.Effect.after (fun () ->
+      Yuka.Browser.on_window "keydown" (fun event ->
+          if Yuka.Event.key event = "Escape" then Yuka.State.set shown false));
+  (* Yuka.element, as the ppx names details' attribute [open], which OCaml cannot spell. *)
+  Yuka.element "details"
+    [ Yuka.attr "class" "user-menu"; Yuka.hole_attr "open" (fun () -> if Yuka.State.get shown then Some "" else None) ]
+    [
+    <summary class_="appbar-link" aria_label=name title=name
+      on_click=(fun event ->
+        Yuka.Event.prevent_default event;
+        Yuka.State.update shown not)>
+      (Icons.svg Icons.account)
+      <span class_="appbar-label">(Yuka.text name)</span>
+    </summary>;
+    Yuka.hole (fun () ->
+        if Yuka.State.get shown then <div class_="menu-backdrop" on_click=(fun _ -> Yuka.State.set shown false) />
+        else Yuka.empty);
+    <div class_="card menu" on_click=(fun _ -> Yuka.State.set shown false)>children</div>;
+    ]

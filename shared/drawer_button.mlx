@@ -1,0 +1,12 @@
+(* The hamburger of the app bar, which shows only on phones and opens the
+   drawer (shared/drawer.mlx). Without JavaScript it is a link to #drawer,
+   which the CSS shows while it is the :target. *)
+
+let[@client] make () =
+  <a class_="appbar-link menu-button" href="#drawer" aria_label="Menu" title="Menu" aria_controls="drawer"
+    aria_expanded=(Yuka.State.get Drawer.shown)
+    on_click=(fun event ->
+      Yuka.Event.prevent_default event;
+      Yuka.State.set Drawer.shown true)>
+    (Icons.svg Icons.menu)
+  </a>

@@ -1,4 +1,4 @@
-(* The theme forms: the toggle in the app bar ([select] false) and the choice of
+(* The theme forms: the toggle in the user menu of the app bar ([select] false) and the choice of
    Settings ([select] true). Without JavaScript they post to /ui/theme, which
    sets the cookie and redirects back to the page of the form (its Referer),
    a full page load. With it, a submit writes the cookie here, switches the
@@ -34,7 +34,8 @@ let[@client] make ~(theme : string) ~(select : bool) () =
   else
     <form method_=`post action=(Routes.theme ()) class_="inline-form" on_submit=submit>
       <input type_=`hidden name="theme" value=(toggled ()) />
-      <button type_=`submit class_="appbar-link" title="Toggle theme">
-        (Yuka.text (if toggled () = "dark" then "Dark" else "Light"))
+      <button type_=`submit class_="menu-item">
+        (Icons.svg (if toggled () = "dark" then Icons.dark else Icons.light))
+        (Yuka.text (if toggled () = "dark" then "Dark theme" else "Light theme"))
       </button>
     </form>

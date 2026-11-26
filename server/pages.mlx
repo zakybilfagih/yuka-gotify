@@ -19,22 +19,39 @@ let find_app (apps : M.application list) id = List.find_opt (fun (a : M.applicat
 
 let link_button ?(class_ = "button text") href label = <a class_ href>(Yuka.text label)</a>
 
+(* The app bar, as Gotify's Header.tsx: links with an icon and a label, only the icon up to
+   1000px, and on phones a second row with the hamburger of the drawer. The user menu holds
+   the theme toggle, Settings and Logout. *)
 let shell ~(session : Ui.session) ~children () =
-  let link href label = <a class_="appbar-link" href>(Yuka.text label)</a> in
+  let link href label icon =
+    <a class_="appbar-link" href aria_label=label title=label>
+      (Icons.svg icon) <span class_="appbar-label">(Yuka.text label)</span>
+    </a>
+  in
   <div class_=(theme_class session.theme)>
     <Yuka.Client start=`Idle><Nav_progress /></Yuka.Client>
     <header class_="appbar">
-      <a class_="brand" href=(Routes.messages ())>"Gotify"</a>
-      <a class_="brand-version" href=release title="Release notes of this Gotify version">(Yuka.text ("@" ^ version))</a>
+      <div class_="appbar-title">
+        <a class_="brand" href=(Routes.messages ())>"Gotify"</a>
+        <a class_="brand-version" href=release title="Release notes of this Gotify version">(Yuka.text ("@" ^ version))</a>
+      </div>
       <nav class_="appbar-actions" aria_label="Main">
-        <Yuka.Client><Theme_form theme=session.theme select=false /></Yuka.Client>
-        (link (Routes.applications ()) "Apps")
-        (link (Routes.clients ()) "Clients")
-        (if session.user.admin then link (Routes.users ()) "Users" else Yuka.empty)
-        (link (Routes.settings ()) "Settings")
-        <form method_=`post action=(Routes.logout ()) class_="inline-form">
-          <button type_=`submit class_="appbar-link">"Logout"</button>
-        </form>
+        <Yuka.Client><Drawer_button /></Yuka.Client>
+        (if session.user.admin then link (Routes.users ()) "Users" Icons.users else Yuka.empty)
+        (link (Routes.applications ()) "Apps" Icons.apps)
+        (link (Routes.clients ()) "Clients" Icons.clients)
+        <Yuka.Client>
+          <User_menu name=session.user.name>
+            (Yuka.fragment
+               [
+                 <Yuka.Client><Theme_form theme=session.theme select=false /></Yuka.Client>;
+                 <a class_="menu-item" href=(Routes.settings ())>(Icons.svg Icons.settings) "Settings"</a>;
+                 <form method_=`post action=(Routes.logout ()) class_="inline-form">
+                   <button type_=`submit class_="menu-item">(Icons.svg Icons.logout) "Logout"</button>
+                 </form>;
+               ])
+          </User_menu>
+        </Yuka.Client>
       </nav>
     </header>
     <div class_="layout">

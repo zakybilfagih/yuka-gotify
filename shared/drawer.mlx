@@ -3,7 +3,16 @@
    across client navigations, so only the client knows the current page.
    The children go at the end (the Notifications button). The applications
    come from the apps query (Yuka.Remote), as in the Applications table, so
-   a change there shows here too. *)
+   a change there shows here too.
+
+   On phones it slides over the page, as Gotify's temporary drawer: the
+   hamburger of the app bar (shared/drawer_button.mlx) sets [shown], and a
+   click on an item, on the backdrop or Escape clears it. Without
+   JavaScript the hamburger links to #drawer, and the drawer shows while it
+   is the :target; the backdrop links away from it. *)
+
+(* Module level, so the hamburger, another island, shares it. The server only reads it. *)
+let shown = Yuka.State.make false
 
 let[@client] make ~children () =
   let remote = Yuka.Remote.make Actions.apps (fun () -> "drawer") in
@@ -14,18 +23,29 @@ let[@client] make ~children () =
     | Some (Routes.App_messages { app; _ }), Some id when app = id -> `page
     | _ -> `false_
   in
-  <nav class_="drawer" aria_label="Applications">
-    <a class_="drawer-item" href=(Routes.messages ()) aria_current=(current None ())>"All Messages"</a>
-    <hr />
-    (Yuka.fragment
-       (List.map
-          (fun (a : Model.app_row) ->
-            <a class_="drawer-item" href=(Routes.app_messages ~app:a.id ()) aria_current=(current (Some a.id) ())>
-              <img src=a.image alt="" width="24" height="24" />
-              (Yuka.text a.name)
-            </a>)
-          (apps ())))
-    (if apps () = [] then <p class_="drawer-empty">"No applications. " <a href=(Routes.applications ())>"Create one"</a></p>
-     else Yuka.empty)
-    children
-  </nav>
+  let close _ = Yuka.State.set shown false in
+  Yuka.Effect.after (fun () ->
+      Yuka.Browser.on_window "keydown" (fun event -> if Yuka.Event.key event = "Escape" then close ()));
+  Yuka.fragment
+    [
+      <nav id="drawer" class_=(if Yuka.State.get shown then "drawer open" else "drawer") aria_label="Applications">
+        <a class_="drawer-item" href=(Routes.messages ()) aria_current=(current None ()) on_click=close>"All Messages"</a>
+        <hr />
+        (Yuka.fragment
+           (List.map
+              (fun (a : Model.app_row) ->
+                <a class_="drawer-item" href=(Routes.app_messages ~app:a.id ()) aria_current=(current (Some a.id) ())
+                  on_click=close>
+                  <img src=a.image alt="" width="24" height="24" />
+                  (Yuka.text a.name)
+                </a>)
+              (apps ())))
+        (if apps () = [] then <p class_="drawer-empty">"No applications. " <a href=(Routes.applications ())>"Create one"</a></p>
+         else Yuka.empty)
+        children
+      </nav>;
+      <a class_="drawer-backdrop" href="#_" aria_label="Close the menu" tabindex=(-1)
+        on_click=(fun event ->
+          Yuka.Event.prevent_default event;
+          close ())></a>;
+    ]

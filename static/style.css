@@ -74,17 +74,39 @@ body {
   background: var(--appbar); color: #fff;
   box-shadow: 0 2px 4px -1px rgba(0,0,0,.2), 0 4px 5px 0 rgba(0,0,0,.14), 0 1px 10px 0 rgba(0,0,0,.12);
 }
-.app .brand { color: #fff; text-decoration: none; font-size: 24px; }
+.appbar-title { flex: 1; display: flex; align-items: center; gap: 10px; }
+.app .brand { color: #fff; text-decoration: none; font-size: 24px; line-height: 1.334; }
 .app .brand-version { font-size: 14px; opacity: .85; color: inherit; text-decoration: none; }
 .brand-version:hover { text-decoration: underline; }
-.appbar-actions { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.appbar-actions { display: flex; align-items: center; gap: 4px; }
 .app .appbar-link {
+  display: inline-flex; align-items: center; gap: 8px;
   color: #fff; text-decoration: none; text-transform: uppercase;
   font: 500 14px/1.75 Roboto, sans-serif; letter-spacing: .02857em;
   padding: 6px 8px; border: 0; background: none; cursor: pointer; border-radius: 4px;
 }
-.appbar-link:hover { background: rgba(255,255,255,.08); }
+.appbar-link:hover, .user-menu[open] > .appbar-link { background: rgba(255,255,255,.08); }
+.appbar-link svg { flex: none; }
+.app .menu-button { display: none; }
 .inline-form { display: inline; margin: 0; }
+
+/* The user menu (shared/user_menu.mlx): a <details> whose card hangs under the name. */
+.user-menu { position: relative; }
+.user-menu > summary { list-style: none; }
+.user-menu > summary::-webkit-details-marker { display: none; }
+.menu-backdrop { position: fixed; inset: 0; }
+.card.menu {
+  position: absolute; right: 0; top: calc(100% + 4px); min-width: 160px; padding: 8px 0;
+  box-shadow: 0 5px 5px -3px rgba(0,0,0,.2), 0 8px 10px 1px rgba(0,0,0,.14), 0 3px 14px 2px rgba(0,0,0,.12);
+}
+.app .menu-item {
+  display: flex; align-items: center; gap: 16px; width: 100%; padding: 6px 16px;
+  font: 400 16px/1.5 Roboto, sans-serif; color: var(--text); text-decoration: none; text-align: left;
+  border: 0; background: none; cursor: pointer; white-space: nowrap;
+}
+.menu-item:hover { background: var(--hover); }
+.menu-item svg { color: var(--muted); }
+.menu .inline-form { display: block; }
 
 /* The bar at the top while a client navigation loads (shared/nav_progress.mlx) */
 .nav-progress {
@@ -120,8 +142,9 @@ body {
 .content { flex: 1; padding: 24px; min-width: 0; }
 .messages, .narrow { max-width: 700px; margin: 0 auto; }
 
-.page-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
-.page-header h1 { margin: 0; font-weight: 400; font-size: 34px; }
+.page-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 24px; }
+/* As Gotify's, the buttons go under a title narrower than 300px. */
+.page-header h1 { margin: 0; font-weight: 400; font-size: 34px; flex: 1 1 0; min-width: 300px; }
 
 /* Cards */
 .card {
@@ -154,6 +177,7 @@ body {
 .message-app { display: block; font-size: 12px; color: var(--muted); }
 .message-title { margin: 0; font-size: 24px; font-weight: 400; line-height: 1.3; word-break: break-word; }
 .message-date { color: var(--text); font-size: 15px; white-space: nowrap; padding-top: 4px; }
+.date-long { display: none; }
 .message-body { margin-top: 8px; word-break: break-word; }
 .message-body.plain { white-space: pre-wrap; }
 .message-body.collapsed { max-height: 250px; overflow: hidden; }
@@ -306,27 +330,60 @@ td.image-cell { white-space: nowrap; }
 .notice { background: rgba(46, 125, 50, 0.12); color: #2e7d32; border-radius: 4px; padding: 8px 16px; margin: 0; }
 .login .card:not(.stack) { padding: 24px; }
 
-@media (max-width: 800px) {
-  .drawer { display: none; }
-  .appbar { padding: 0 12px; }
-  .brand-version { display: none; }
+/* The breakpoints of Gotify's Material UI: the app bar shows only icons up to 1000px; under
+   900px (md) they center and a message card puts its date under the title and its icon on the
+   right; under 600px (sm) they make a second row with the hamburger, and the drawer slides
+   over the page. */
+@media (max-width: 1000px) {
+  .appbar-label { display: none; }
+  .app .appbar-link { padding: 12px; border-radius: 50%; }
+  .appbar-link svg { width: 24px; height: 24px; }
 }
 
-/* Phones: the app bar wraps, and the drawer is a row of apps above the content */
-@media (max-width: 700px) {
-  .appbar { height: auto; flex-wrap: wrap; gap: 0 12px; padding: 8px 12px; }
-  .appbar-actions { margin-left: 0; width: 100%; flex-wrap: wrap; }
-  .layout { flex-direction: column; }
-  .drawer {
-    position: static; height: auto; align-self: stretch; flex: none; display: flex; align-items: center; overflow-x: auto;
-    border-right: 0; border-bottom: 1px solid var(--divider);
+@media (max-width: 899.98px) {
+  .appbar-title { flex: none; }
+  .appbar-actions { flex: 1; justify-content: center; }
+
+  .message {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "heading trash" "date image" "body body" "more more";
+    gap: 0 8px;
+    padding: 16px;
   }
-  .drawer hr { display: none; }
-  .app .drawer-item { flex: none; gap: 8px; padding: 8px 12px; white-space: nowrap; }
-  .drawer-item img { width: 24px; height: 24px; }
-  .content { padding: 12px; }
-  .page-header h1 { font-size: 26px; }
+  .message-main, .message-head { display: contents; }
+  .message-heading { grid-area: heading; }
+  .message-title { line-height: 1.2; }
+  .message-head > .icon-button { grid-area: trash; justify-self: end; margin: -8px -8px 0 0; }
+  .message-date { grid-area: date; padding-top: 0; font-size: 16px; opacity: .7; white-space: normal; }
+  .date-narrow { display: none; }
+  .date-long { display: inline; }
+  .message > .app-image { grid-area: image; justify-self: end; width: 30px; height: 30px; }
+  .message-body { grid-area: body; }
+  .button.read-more { grid-area: more; justify-self: start; }
 }
+
+@media (max-width: 599.98px) {
+  .appbar { height: auto; flex-wrap: wrap; gap: 0; padding: 0 16px 10px; }
+  .appbar-actions { flex-basis: 100%; height: 50px; margin-top: 5px; justify-content: space-between; }
+  .app .menu-button { display: inline-flex; }
+  .message-list > li { scroll-margin-top: 105px; }
+  .card.banner { top: 105px; }
+
+  /* Under the app bar (97px tall), which stays above it. */
+  .drawer {
+    position: fixed; top: 0; left: 0; z-index: 9; width: 250px; height: 100vh; padding-top: 97px;
+    border-right: 0; box-shadow: 0 8px 10px -5px rgba(0,0,0,.2), 0 16px 24px 2px rgba(0,0,0,.14), 0 6px 30px 5px rgba(0,0,0,.12);
+    transform: translateX(-100%); visibility: hidden; transition: transform 225ms cubic-bezier(0, 0, .2, 1), visibility 225ms;
+  }
+  .drawer:target, .drawer.open { transform: none; visibility: visible; }
+  .drawer:target + .drawer-backdrop, .drawer.open + .drawer-backdrop {
+    display: block; position: fixed; inset: 0; z-index: 8; background: rgba(0, 0, 0, 0.5);
+  }
+  .content { padding: 8px; }
+  .message { margin-bottom: 8px; }
+}
+.drawer-backdrop { display: none; }
+@media (prefers-reduced-motion: reduce) { .drawer { transition: none; } }
 
 /* Reordering applications */
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
