@@ -22,7 +22,7 @@ let publish uid (m : Model.message) =
   List.iter
     (fun s ->
       Lwt.async (fun () ->
-          Lwt.catch (fun () -> Ache_lwt.Websocket.send s.ws text) (fun _ -> remove uid s; Lwt.return_unit)))
+          Lwt.catch (fun () -> Ache_lwt.Websocket.send_text s.ws text) (fun _ -> remove uid s; Lwt.return_unit)))
     (of_user uid);
   changed uid
 
@@ -42,19 +42,29 @@ let user_deleted uid =
   List.iter close (of_user uid);
   Hashtbl.remove sockets uid
 
-(** Answers the upgrade and keeps the socket until the client goes. *)
+(* The server pings every socket, as Gotify (server.stream.pingperiodseconds):
+   ache closes a socket that receives no frame for 60 s, and a client that
+   only listens sends none but the pong. *)
+let ping_period = 45.
+
+(** Answers the upgrade and keeps the socket until the client goes: ache runs
+    the session and closes the socket when it ends. *)
 let serve reqd ~user_id ~token =
-  match Ache_lwt.Websocket.upgrade ~max_message_size:64 reqd with
+  let session ws =
+    let s = { token; ws } in
+    add user_id s;
+    let rec drain () =
+      Lwt.bind (Ache_lwt.Websocket.receive ws) (function Some _ -> drain () | None -> Lwt.return_unit)
+    in
+    let rec ping () =
+      Lwt.bind (Lwt_unix.sleep ping_period) (fun () -> Lwt.bind (Ache_lwt.Websocket.ping ws "") ping)
+    in
+    Lwt.finalize
+      (fun () -> Lwt.catch (fun () -> Lwt.pick [ drain (); ping () ]) (fun _ -> Lwt.return_unit))
+      (fun () -> remove user_id s; Lwt.return_unit)
+  in
+  match Ache_lwt.Websocket.upgrade ~max_message_size:64 reqd session with
+  | Ok () -> ()
   | Error `Unsupported_version ->
       Http.respond reqd ~headers:[ ("sec-websocket-version", "13") ] 426 "Upgrade Required"
   | Error _ -> Http.error reqd 400 "Bad Request"
-  | Ok ws ->
-      let s = { token; ws } in
-      add user_id s;
-      let rec drain () =
-        Lwt.bind (Ache_lwt.Websocket.receive ws) (function Some _ -> drain () | None -> Lwt.return_unit)
-      in
-      Lwt.async (fun () ->
-          Lwt.finalize
-            (fun () -> Lwt.catch drain (fun _ -> Lwt.return_unit))
-            (fun () -> remove user_id s; Lwt.return_unit))
