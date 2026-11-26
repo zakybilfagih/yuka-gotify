@@ -50,6 +50,12 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 
+/* Keyboard focus: a ring in the accent color, white on the app bar (its background is the
+   accent in light mode). Inputs with an underline keep that instead. */
+.app :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.app .appbar :focus-visible { outline-color: #fff; }
+.app .field input:focus-visible, .app .field textarea:focus-visible { outline: none; }
+
 body {
   margin: 0;
   font-family: Roboto, "Helvetica Neue", Arial, sans-serif;
