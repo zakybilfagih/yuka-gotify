@@ -167,6 +167,14 @@ body {
 .message-body .table-scroll { overflow-x: auto; margin: 0 0 8px; }
 .message-body table { width: auto; }
 .message-body th, .message-body td { padding: 6px 12px; white-space: normal; }
+/* Headings at the browser's default sizes, as Gotify shows them. */
+.message-body [class^="md-h"] { font-weight: bold; line-height: normal; }
+.message-body .md-h1 { font-size: 2em; margin: .67em 0; }
+.message-body .md-h2 { font-size: 1.5em; margin: .83em 0; }
+.message-body .md-h3 { font-size: 1.17em; margin: 1em 0; }
+.message-body .md-h4 { font-size: 1em; margin: 1.33em 0; }
+.message-body .md-h5 { font-size: .83em; margin: 1.67em 0; }
+.message-body .md-h6 { font-size: .67em; margin: 2.33em 0; }
 .empty { color: var(--muted); text-align: center; padding: 16px; margin: 0; }
 .card.banner {
   position: sticky; top: 72px; z-index: 5;

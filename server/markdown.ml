@@ -54,7 +54,13 @@ let rec block defs ~tight (node : Block.t) : Markup.node list =
       let content = inline defs (Block.Paragraph.inline p) in
       if tight then content else [ element "p" content ]
   | Block.Heading (h, _) ->
-      [ element ("h" ^ Int.to_string (min 6 (Block.Heading.level h + 2))) (inline defs (Block.Heading.inline h)) ]
+      (* Two levels down, under the h2 of the message title; the class keeps
+         the Markdown level, which the style sizes as Gotify shows it. *)
+      let level = Block.Heading.level h in
+      [
+        element ~attributes:[ ("class", "md-h" ^ Int.to_string level) ] ("h" ^ Int.to_string (min 6 (level + 2)))
+          (inline defs (Block.Heading.inline h));
+      ]
   | Block.Block_quote (q, _) -> [ element "blockquote" (block defs ~tight:false (Block.Block_quote.block q)) ]
   | Block.List (l, _) ->
       let tight = Block.List'.tight l in
