@@ -25,7 +25,7 @@ let shell ~(session : Ui.session) ~children () =
       <a class_="brand" href=(Routes.messages ())>"Gotify"</a>
       <a class_="brand-version" href=release title="Release notes of this Gotify version">(Yuka.text ("@" ^ version))</a>
       <nav class_="appbar-actions" aria_label="Main">
-        <Yuka.Client><Theme_form theme=session.theme select=false next="/" /></Yuka.Client>
+        <Yuka.Client><Theme_form theme=session.theme select=false /></Yuka.Client>
         (link (Routes.applications ()) "Apps")
         (link (Routes.clients ()) "Clients")
         (if session.user.admin then link (Routes.users ()) "Users" else Yuka.empty)
@@ -359,7 +359,7 @@ let settings ~(session : Ui.session) ~alert () =
         (alert_view alert)
         <div class_="card stack">
           <h2>"Theme"</h2>
-          <Yuka.Client><Theme_form theme=session.theme select=true next="/settings" /></Yuka.Client>
+          <Yuka.Client><Theme_form theme=session.theme select=true /></Yuka.Client>
         </div>
         <div class_="card stack">
           <h2>"Change password"</h2>

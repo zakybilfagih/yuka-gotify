@@ -54,6 +54,20 @@ let register_post req =
                    let* _ = Db.create_user ~name ~pass:(Auth.hash_password pass) ~admin:false in
                    Lwt.return (redirect "/login?registered=true")))
 
+(* The path and query of the Referer, the page a form was posted from; the
+   origin check of the POST already refused other sites. *)
+let referer req =
+  match Yuka.Server.Request.header req "referer" with
+  | None -> None
+  | Some url -> (
+      match String.index_opt url ':' with
+      | Some i when i + 2 < String.length url && String.sub url i 3 = "://" -> (
+          let rest = String.sub url (i + 3) (String.length url - i - 3) in
+          match String.index_opt rest '/' with
+          | Some j -> Some (String.sub rest j (String.length rest - j))
+          | None -> Some "/")
+      | _ -> None)
+
 let theme req =
   Yuka.Async.bind (Ui.form req) (fun fields ->
       let t = match Ui.field fields "theme" with ("light" | "dark") as t -> t | _ -> "system" in
@@ -62,7 +76,7 @@ let theme req =
         | Ok h -> [ h ]
         | Error _ -> []
       in
-      redirect ~headers (Ui.safe_next (List.assoc_opt "next" fields)))
+      redirect ~headers (Ui.safe_next (match List.assoc_opt "next" fields with Some _ as n -> n | None -> referer req)))
 
 (* Applications *)
 
