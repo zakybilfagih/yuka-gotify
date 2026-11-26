@@ -1,0 +1,35 @@
+(* The theme forms: the toggle in the app bar ([select] false) and the choice of
+   Settings ([select] true). Without JavaScript they post to /ui/theme, which
+   sets the cookie and redirects, a full page load. With it, a submit writes
+   the cookie here and loads the page again with a client navigation: the
+   theme is in the session of the shell, so Yuka renders the shell again. *)
+
+let cookie = "gotify-theme"
+
+let[@client] make ~(theme : string) ~(select : bool) ~(next : string) () =
+  let toggled = if theme = "dark" then "light" else "dark" in
+  let chosen = Yuka.State.make (if select then theme else toggled) in
+  let submit event =
+    match Yuka.Browser.set_cookie ~max_age:(365 * 24 * 3600) cookie (Yuka.State.peek chosen) with
+    | Ok () ->
+        Yuka.Event.prevent_default event;
+        Yuka.Browser.refresh ()
+    | Error _ -> ()
+  in
+  let option value label = <option value selected=(theme = value)>(Yuka.text label)</option> in
+  if select then
+    <form method_=`post action=(Routes.theme ()) class_="row" on_submit=submit>
+      <input type_=`hidden name="next" value=next />
+      <select name="theme" aria_label="Theme" on_change=(fun event -> Yuka.State.set chosen (Yuka.Event.target_value event))>
+        (option "system" "System") (option "light" "Light") (option "dark" "Dark")
+      </select>
+      <button type_=`submit class_="button contained">"Apply"</button>
+    </form>
+  else
+    <form method_=`post action=(Routes.theme ()) class_="inline-form" on_submit=submit>
+      <input type_=`hidden name="theme" value=toggled />
+      <input type_=`hidden name="next" value=next />
+      <button type_=`submit class_="appbar-link" title="Toggle theme">
+        (Yuka.text (if toggled = "dark" then "Dark" else "Light"))
+      </button>
+    </form>

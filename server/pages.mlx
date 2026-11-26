@@ -19,20 +19,13 @@ let link_button ?(class_ = "button text") href label = <a class_ href>(Yuka.text
 
 let shell ~(session : Ui.session) ~children () =
   let link href label = <a class_="appbar-link" href>(Yuka.text label)</a> in
-  let next_theme = if session.theme = "dark" then "light" else "dark" in
   <div class_=(theme_class session.theme)>
     <Yuka.Client start=`Idle><Nav_progress /></Yuka.Client>
     <header class_="appbar">
       <a class_="brand" href=(Routes.messages ())>"Gotify"</a>
       <a class_="brand-version" href=release title="Release notes of this Gotify version">(Yuka.text ("@" ^ version))</a>
       <nav class_="appbar-actions" aria_label="Main">
-        <form method_=`post action=(Routes.theme ()) class_="inline-form">
-          <input type_=`hidden name="theme" value=next_theme />
-          <input type_=`hidden name="next" value="/" />
-          <button type_=`submit class_="appbar-link" title="Toggle theme">
-            (Yuka.text (if next_theme = "dark" then "Dark" else "Light"))
-          </button>
-        </form>
+        <Yuka.Client><Theme_form theme=session.theme select=false next="/" /></Yuka.Client>
         (link (Routes.applications ()) "Apps")
         (link (Routes.clients ()) "Clients")
         (if session.user.admin then link (Routes.users ()) "Users" else Yuka.empty)
@@ -361,21 +354,12 @@ let user_remove_dialog ~session ~user ~id ~alert () = dialog Overlay ~session ~a
 
 let settings ~(session : Ui.session) ~alert () =
   Yuka.Server.page ~title:"Settings - Gotify" (fun () ->
-      let option value label =
-        <option value selected=(session.theme = value)>(Yuka.text label)</option>
-      in
       <section class_="narrow">
         <header class_="page-header"><h1>"Settings"</h1></header>
         (alert_view alert)
         <div class_="card stack">
           <h2>"Theme"</h2>
-          <form method_=`post action=(Routes.theme ()) class_="row">
-            <input type_=`hidden name="next" value="/settings" />
-            <select name="theme" aria_label="Theme">
-              (option "system" "System") (option "light" "Light") (option "dark" "Dark")
-            </select>
-            <button type_=`submit class_="button contained">"Apply"</button>
-          </form>
+          <Yuka.Client><Theme_form theme=session.theme select=true next="/settings" /></Yuka.Client>
         </div>
         <div class_="card stack">
           <h2>"Change password"</h2>
