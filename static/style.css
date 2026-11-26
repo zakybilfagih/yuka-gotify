@@ -394,20 +394,31 @@ td.order { width: 1%; padding-right: 0; white-space: nowrap; }
 tr.dragging { opacity: .5; background: var(--hover); }
 
 /* Page changes inside a view transition (Yuka.render ~transitions:true): the app bar and drawer
-   switch at once, and only the content fades and slides, from the right for a push and the
-   left for back. Browsers without view transitions, and pages without JS, just swap. */
+   switch at once, and the content does Material's "shared axis X": both pages move 30px the
+   same way over 300ms, to the left for a push and to the right for back, while the old one
+   fades out in the first 90ms and the new one fades in after it. The two never show at once,
+   so two layouts never ghost over each other. Browsers without view transitions, and pages
+   without JS, just swap. */
 .appbar { view-transition-name: appbar; }
 .drawer { view-transition-name: drawer; }
 .content { view-transition-name: content; }
 ::view-transition-old(root), ::view-transition-old(appbar), ::view-transition-old(drawer) { display: none; }
 ::view-transition-new(root), ::view-transition-new(appbar), ::view-transition-new(drawer) { animation: none; }
-::view-transition-group(content) { animation-duration: 220ms; }
-::view-transition-old(content) { animation: vtOut 120ms ease-in both; }
-::view-transition-new(content) { animation: vtIn 220ms cubic-bezier(0.2, 0, 0, 1) 60ms both; }
-[data-yuka-nav="back"]::view-transition-new(content) { animation-name: vtInBack; }
-@keyframes vtOut { to { opacity: 0; } }
-@keyframes vtIn { from { opacity: 0; transform: translateX(16px); } }
-@keyframes vtInBack { from { opacity: 0; transform: translateX(-16px); } }
+::view-transition-group(content) { animation: none; }
+::view-transition-old(content) {
+  animation: vtFadeOut 90ms cubic-bezier(0.4, 0, 1, 1) both, vtToStart 300ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+::view-transition-new(content) {
+  animation: vtFadeIn 210ms cubic-bezier(0, 0, 0.2, 1) 90ms both, vtFromEnd 300ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+[data-yuka-nav="back"]::view-transition-old(content) { animation-name: vtFadeOut, vtToEnd; }
+[data-yuka-nav="back"]::view-transition-new(content) { animation-name: vtFadeIn, vtFromStart; }
+@keyframes vtFadeOut { to { opacity: 0; } }
+@keyframes vtFadeIn { from { opacity: 0; } }
+@keyframes vtToStart { to { transform: translateX(-30px); } }
+@keyframes vtToEnd { to { transform: translateX(30px); } }
+@keyframes vtFromEnd { from { transform: translateX(30px); } }
+@keyframes vtFromStart { from { transform: translateX(-30px); } }
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }
