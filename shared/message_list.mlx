@@ -213,7 +213,7 @@ let[@client] make ~(feed : Model.feed) ~(initial : Model.page) ~(title : string)
                    <h2 class_="message-title">(Yuka.text m.title)</h2>
                    <span class_="message-app">(Yuka.text m.app_name)</span>
                  </div>
-                 <time class_="message-date" title=m.date>(Yuka.text (Time_ago.text ~now:(Yuka.State.get clock) m.time))</time>
+                 <time class_="message-date" title=m.date>(Yuka.text (Time_ago.text ~style:`Narrow ~now:(Yuka.State.get clock) m.time))</time>
                  <a class_="icon-button" href=(Routes.message_remove ~id:m.id ~back:here ()) aria_label="Delete message"
                    title="Delete" on_click=(delete m.id)>
                    trash
