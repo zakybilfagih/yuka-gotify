@@ -7,6 +7,6 @@ let[@client] make () =
     aria_expanded=(Yuka.State.get Drawer.shown)
     on_click=(fun event ->
       Yuka.Event.prevent_default event;
-      Yuka.State.set Drawer.shown true)>
+      Yuka.State.update Drawer.shown (fun shown -> not shown))>
     (Icons.svg Icons.menu)
   </a>
