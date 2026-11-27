@@ -192,7 +192,47 @@ let status_text code =
   | 500 -> "Internal Server Error"
   | _ -> "Error"
 
-let respond reqd ?(headers = []) code text =
+(* Headers that the answer to a request gets, as gin's middleware sets them
+   before the handler runs: Gotify's response headers, CORS, and the session
+   cookie. A later one replaces an earlier one of the same name, and the
+   handler's own headers replace them all, apart from Set-Cookie, which adds
+   up. [forget] drops them once the request is done. *)
+let pending : (Reqd.t * (string * string) list) list ref = ref []
+let extra reqd = Option.value (List.assq_opt reqd !pending) ~default:[]
+let forget reqd = pending := List.filter (fun (r, _) -> r != reqd) !pending
+let set_cookie = "set-cookie"
+let lower (k, v) = (String.lowercase_ascii k, v)
+
+let add_headers reqd headers =
+  let headers = List.map lower headers in
+  let replaced (k, _) = k <> set_cookie && List.mem_assoc k headers in
+  let kept = List.filter (fun h -> not (replaced h)) (extra reqd) in
+  forget reqd;
+  pending := (reqd, kept @ headers) :: !pending
+
+(** The first cookie of this name, as Go's [Request.Cookie] reads it. *)
+let cookie reqd name =
+  Option.bind (header reqd "cookie") (fun h ->
+      List.find_map
+        (fun pair ->
+          match String.index_opt pair '=' with
+          | Some i when String.trim (String.sub pair 0 i) = name ->
+              let v = String.trim (String.sub pair (i + 1) (String.length pair - i - 1)) in
+              Some (if String.length v >= 2 && v.[0] = '"' && v.[String.length v - 1] = '"' then String.sub v 1 (String.length v - 2) else v)
+          | _ -> None)
+        (String.split_on_char ';' h))
+
+(* [content_type] is gin's JSON type: it gives way to a Content-Type of the
+   response headers, where the handler's [headers] do not. *)
+let respond reqd ?(headers = []) ?content_type code text =
+  let headers = List.map lower headers in
+  let extra = List.filter (fun (k, _) -> k = set_cookie || not (List.mem_assoc k headers)) (extra reqd) in
+  let headers =
+    match content_type with
+    | Some t when not (List.mem_assoc "content-type" headers || List.mem_assoc "content-type" extra) ->
+        (("content-type", t) :: headers) @ extra
+    | _ -> headers @ extra
+  in
   let headers =
     if code = 204 || code = 304 then headers else ("content-length", string_of_int (String.length text)) :: headers
   in
@@ -201,9 +241,9 @@ let respond reqd ?(headers = []) code text =
   Reqd.respond_with_string reqd (Ache.Response.create ~headers (Ache.Status.of_code code)) text
 
 let json reqd ?(code = 200) value =
-  respond reqd ~headers:[ ("content-type", "application/json") ] code (Yojson.Safe.to_string value)
+  respond reqd ~content_type:"application/json" code (Yojson.Safe.to_string value)
 
-let empty reqd code = respond reqd ~headers:[ ("content-type", "application/json") ] code ""
+let empty reqd code = respond reqd ~content_type:"application/json" code ""
 
 let error reqd code description =
   json reqd ~code

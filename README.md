@@ -16,8 +16,8 @@ reconnect banner, Push message, drag to reorder applications, edit/delete/new
 token/elevate dialogs as overlays, token reveal with Copy, light and dark
 themes, and registration when enabled.
 
-Not implemented: plugins, OIDC, application image upload, Gotify's
-`gotify-client-token` cookie and signed four-part tokens. Passwords are hashed
+Not implemented: plugins, OIDC, application image upload and signed
+four-part tokens. Passwords are hashed
 with bcrypt, not Argon2.
 
 ## Requirements

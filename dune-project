@@ -52,4 +52,5 @@
   mirage-crypto-ec
   mirage-crypto-rng
   safepass
+  re
   (alcotest :with-test)))

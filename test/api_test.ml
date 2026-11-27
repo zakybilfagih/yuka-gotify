@@ -12,7 +12,7 @@ let port = ref 0
 let addr () = Unix.ADDR_INET (Unix.inet_addr_loopback, !port)
 let run p = Lwt_main.run (Lwt_unix.with_timeout 5. (fun () -> p))
 
-type response = { status : int; body : string }
+type response = { status : int; headers : (string * string) list; body : string }
 
 let read_exactly ic n =
   let b = Bytes.create n in
@@ -34,7 +34,7 @@ let read_response ic =
   headers [] >>= fun hs ->
   let status = match String.split_on_char ' ' status_line with _ :: c :: _ -> int_of_string c | _ -> 0 in
   let len = match List.assoc_opt "content-length" hs with Some n -> int_of_string n | None -> 0 in
-  read_exactly ic len >|= fun body -> { status; body }
+  read_exactly ic len >|= fun body -> { status; headers = hs; body }
 
 let request ?(headers = []) ?(body = "") meth path =
   Lwt_io.with_connection (addr ()) (fun (ic, oc) ->
@@ -57,6 +57,13 @@ let call ?auth ?json ?(headers = []) meth path =
   run (request ~headers ~body meth path)
 
 let json r = Yojson.Safe.from_string r.body
+
+(* The token of a login, from its gotify-client-token cookie. *)
+let cookie_token r =
+  let set = Option.value (List.assoc_opt "set-cookie" r.headers) ~default:"" in
+  match String.split_on_char ';' set with
+  | first :: _ when String.starts_with ~prefix:"gotify-client-token=" first -> String.sub first 20 (String.length first - 20)
+  | _ -> Alcotest.fail ("no session cookie: " ^ set)
 let status what expected r = Alcotest.(check int) (Printf.sprintf "%s (%s)" what r.body) expected r.status
 let str j name = J.(member name j |> to_string)
 let int j name = J.(member name j |> to_int)
@@ -205,7 +212,7 @@ let elevation () =
   let r = call ~auth:admin ~json:(`Assoc [ ("name", `String "web") ]) "POST" "/auth/local/login" in
   status "login" 200 r;
   let j = json r in
-  let token = str j "token" and client = int j "clientId" in
+  let token = cookie_token r and client = int j "clientId" in
   Alcotest.(check bool) "a login is elevated" true (has j "elevatedUntil");
   let app, _ = create_app "to delete" in
   status "end the elevation" 204
@@ -222,15 +229,16 @@ let elevation () =
   status "token after logout" 401 (call ~auth:(bearer token) "GET" "/current/user")
 
 (* A WebSocket client that only reads: server frames are not masked. *)
-let ws_open path =
+let ws_open ?(origin = "") path =
   let fd = Lwt_unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
   Lwt_unix.connect fd (addr ()) >>= fun () ->
   let ic = Lwt_io.of_fd ~mode:Lwt_io.Input fd and oc = Lwt_io.of_fd ~mode:Lwt_io.Output fd in
   Lwt_io.write oc
     (Printf.sprintf
        "GET %s HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\
-        Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n"
-       path)
+        Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n%s\r\n"
+       path
+       (if origin = "" then "" else "Origin: " ^ origin ^ "\r\n"))
   >>= fun () ->
   read_response ic >|= fun r -> (r.status, ic, fd)
 
@@ -259,7 +267,10 @@ let stream () =
   let _, carol_token = create_app ~auth:(basic "carol" "carolpass") "carol's" in
   let client, ctoken = create_client "phone" in
   let _, app_token = create_app "streamed" in
-  let code, ic, fd = run (ws_open ("/stream?token=" ^ ctoken)) in
+  let foreign, _, fd = run (ws_open ~origin:"http://evil.example" ("/stream?token=" ^ ctoken)) in
+  run (Lwt_unix.close fd);
+  Alcotest.(check int) "a socket from another site is refused" 403 foreign;
+  let code, ic, fd = run (ws_open ~origin:"http://127.0.0.1" ("/stream?token=" ^ ctoken)) in
   Alcotest.(check int) "upgrade" 101 code;
   status "another user's push" 200 (push carol_token "not for admin");
   let sent = push ~fields:[ ("title", `String "To the phone"); ("priority", `Int 8) ] app_token "hello phone" in
@@ -323,6 +334,39 @@ let images () =
   status "its image is gone" 404 (call "GET" ("/" ^ third));
   status "no path traversal" 404 (call "GET" "/image/..%2f..%2fetc%2fpasswd.png")
 
+(* The login cookie authenticates like a token, and logout clears it. *)
+let session_cookie () =
+  let r = call ~auth:admin ~json:(`Assoc [ ("name", `String "cookie") ]) "POST" "/auth/local/login" in
+  status "login" 200 r;
+  let set = Option.value (List.assoc_opt "set-cookie" r.headers) ~default:"" in
+  let token = cookie_token r in
+  Alcotest.(check string) "the cookie holds the token"
+    ("gotify-client-token=" ^ token ^ "; Path=/; Max-Age=604800; HttpOnly; SameSite=Strict") set;
+  Alcotest.(check bool) "a client token" true (String.starts_with ~prefix:"gtfyc." token);
+  Alcotest.(check bool) "and not in the body" false (has (json r) "token");
+  let cookie = ("cookie", "other=1; gotify-client-token=" ^ token) in
+  status "the cookie authenticates" 200 (call ~headers:[ cookie ] "GET" "/current/user");
+  let cross = ("sec-fetch-site", "cross-site") in
+  status "another site reads with the cookie" 200 (call ~headers:[ cookie; cross ] "GET" "/current/user");
+  status "another site cannot log out with the cookie" 403 (call ~headers:[ cookie; cross ] "POST" "/auth/logout");
+  status "nor with basic auth beside it" 403 (call ~auth:admin ~headers:[ cookie; cross ] "POST" "/auth/logout");
+  (* With CORS allowing every site, the cookie check is what refuses. *)
+  Cors.allow_origins := [ Cors.regex ".*" ];
+  let r = call ~headers:[ cookie; ("origin", "http://127.0.0.1.evil") ] "POST" "/auth/logout" in
+  Cors.allow_origins := [];
+  status "an old browser on another site cannot either" 403 r;
+  Alcotest.(check string) "description"
+    "cross-origin request detected, and/or browser is out of date: Sec-Fetch-Site is missing, and Origin does not match Host"
+    (str (json r) "errorDescription");
+  let r = call ~headers:[ cookie; ("origin", "http://127.0.0.1") ] "POST" "/auth/logout" in
+  status "logout by cookie" 200 r;
+  Alcotest.(check (option string)) "logout clears the cookie"
+    (Some "gotify-client-token=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict") (List.assoc_opt "set-cookie" r.headers);
+  status "the cookie after logout" 401 (call ~headers:[ cookie ] "GET" "/current/user");
+  status "another site is refused" 403 (call ~headers:[ ("origin", "http://evil.example") ] "GET" "/version");
+  status "the same site is not" 200 (call ~headers:[ ("origin", "http://127.0.0.1") ] "GET" "/version");
+  status "/health takes any site" 200 (call ~headers:[ ("origin", "http://evil.example") ] "GET" "/health")
+
 let last_admin () =
   let me = int (json (call ~auth:admin "GET" "/current/user")) "id" in
   let r = call ~auth:admin "DELETE" (Printf.sprintf "/user/%d" me) in
@@ -359,6 +403,7 @@ let () =
           test "elevated sessions" elevation;
           test "stream delivers and closes" stream;
           test "application images" images;
+          test "session cookie and other sites" session_cookie;
           test "the last admin stays" last_admin;
         ] );
     ]

@@ -47,9 +47,37 @@ let user_deleted uid =
    only listens sends none but the pong. *)
 let ping_period = 45.
 
+(** server.stream.allowedorigins: regular expressions, matched anywhere in the
+    lowercased host name of the Origin. *)
+let allowed_origins : Re.re list ref = ref []
+
+(* Gotify's isAllowedOrigin: no Origin, the request's own host, or an allowed
+   host name. *)
+let origin_allowed reqd =
+  match Http.header reqd "origin" with
+  | None | Some "" -> true
+  | Some origin ->
+      let u = Uri.of_string origin in
+      let name = Option.value (Uri.host u) ~default:"" in
+      let host = match Uri.port u with Some p -> Printf.sprintf "%s:%d" name p | None -> name in
+      let own = Option.value (Http.header reqd "host") ~default:"" in
+      String.lowercase_ascii host = String.lowercase_ascii own
+      || List.exists (fun r -> Re.execp r (String.lowercase_ascii name)) !allowed_origins
+
 (** Answers the upgrade and keeps the socket until the client goes: ache runs
-    the session and closes the socket when it ends. *)
+    the session and closes the socket when it ends. A socket from another
+    site is refused, as gorilla/websocket refuses it. *)
 let serve reqd ~user_id ~token =
+  if not (origin_allowed reqd) then
+    Http.respond reqd
+      ~headers:
+        [
+          ("content-type", "text/plain; charset=utf-8");
+          ("sec-websocket-version", "13");
+          ("x-content-type-options", "nosniff");
+        ]
+      403 "Forbidden\n"
+  else
   let session ws =
     let s = { token; ws } in
     add user_id s;

@@ -305,11 +305,9 @@ let login c =
                     Db.create_client ~user_id:u.id ~name:cname ~elevated_until:(now () +. elevation)
                       ~expires_after:(7 * 24 * 3600) public
                   in
-                  (* No cookie: this API authenticates by token only. *)
-                  ok_json c
-                    (match current_user_json ~client:cl u with
-                    | `Assoc kv -> `Assoc (kv @ [ ("token", `String secret) ])
-                    | j -> j)))
+                  (* As Gotify, the token is in the cookie only. *)
+                  Auth.set_cookie c.reqd secret;
+                  ok_json c (current_user_json ~client:cl u)))
 
 let route c =
   let m = (H.request c.reqd).meth in
@@ -338,6 +336,7 @@ let route c =
   | `POST, [ "auth"; "local"; "login" ] -> login c
   | `POST, [ "auth"; "logout" ] ->
       with_auth Auth.client c (fun id ->
+          Auth.set_cookie c.reqd ~max_age:(-1) "";
           match Auth.client_of id with
           | None -> fail c 403 "no client auth provided"
           | Some cl ->
@@ -507,13 +506,19 @@ let dispatch reqd =
   let segs = H.segments path in
   match segs with
   | root :: _ when List.mem root api_roots ->
+      (* Gotify registers /health and /image before its header and CORS
+         middleware. *)
+      let cors = root <> "health" && root <> "image" in
       Lwt.async (fun () ->
-          Lwt.catch
-            (fun () -> route { reqd; segs })
-            (fun e ->
-              prerr_endline ("gotify api: " ^ Printexc.to_string e);
-              (try H.error reqd 500 "internal error" with _ -> ());
-              Lwt.return_unit));
+          Lwt.finalize
+            (fun () ->
+              Lwt.catch
+                (fun () -> if (not cors) || Cors.apply reqd then route { reqd; segs } else Lwt.return_unit)
+                (fun e ->
+                  prerr_endline ("gotify api: " ^ Printexc.to_string e);
+                  (try H.error reqd 500 "internal error" with _ -> ());
+                  Lwt.return_unit))
+            (fun () -> H.forget reqd; Lwt.return_unit));
       true
   | _ -> false
 

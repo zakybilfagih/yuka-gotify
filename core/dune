@@ -21,4 +21,5 @@
   mirage-crypto-rng
   mirage-crypto-rng.unix
   safepass
+  re
   unix))

@@ -6,7 +6,46 @@ let read file = In_channel.with_open_bin file In_channel.input_all
 let usage =
   "gotify-yuka [--port N] [--interface IP] [--db FILE] [--images DIR] [--secure]\n\
    Environment: YUKA_SECRET (at least 32 bytes, required), GOTIFY_DEFAULTUSER_NAME,\n\
-   GOTIFY_DEFAULTUSER_PASS, GOTIFY_REGISTRATION=true"
+   GOTIFY_DEFAULTUSER_PASS, GOTIFY_REGISTRATION=true, GOTIFY_SERVER_SECURECOOKIE,\n\
+   GOTIFY_SERVER_RESPONSEHEADERS, GOTIFY_SERVER_CORS_ALLOWORIGINS, GOTIFY_SERVER_CORS_ALLOWMETHODS,\n\
+   GOTIFY_SERVER_CORS_ALLOWHEADERS, GOTIFY_SERVER_STREAM_ALLOWEDORIGINS"
+
+let fatal message =
+  prerr_endline message;
+  exit 1
+
+(* Gotify's config/parse.go: a list is one CSV record, a map is a JSON object,
+   a bool is Go's strconv.ParseBool. *)
+let env_list name =
+  match Sys.getenv_opt name with
+  | None | Some "" -> []
+  | Some raw ->
+      List.map
+        (fun v ->
+          let v = String.trim v in
+          if String.length v >= 2 && v.[0] = '"' && v.[String.length v - 1] = '"' then String.sub v 1 (String.length v - 2)
+          else v)
+        (String.split_on_char ',' raw)
+
+let env_map name =
+  match Sys.getenv_opt name with
+  | None | Some "" -> []
+  | Some raw -> (
+      match Yojson.Safe.from_string raw with
+      | `Assoc kv ->
+          List.map (function k, `String v -> (k, v) | _ -> fatal (Printf.sprintf "invalid JSON for %s: values must be strings" name)) kv
+      | _ -> fatal (Printf.sprintf "invalid JSON for %s: not an object" name)
+      | exception Yojson.Json_error m -> fatal (Printf.sprintf "invalid JSON for %s: %s" name m))
+
+let env_bool name =
+  match Sys.getenv_opt name with
+  | None -> false
+  | Some ("1" | "t" | "T" | "TRUE" | "true" | "True") -> true
+  | Some ("0" | "f" | "F" | "FALSE" | "false" | "False") -> false
+  | Some raw -> fatal (Printf.sprintf "invalid boolean for %s: %S" name raw)
+
+let env_regexes name =
+  List.map (fun s -> try Gotify_core.Cors.regex s with Failure m -> fatal (name ^ ": " ^ m)) (env_list name)
 
 let () =
   let port = ref 8080 and interface = ref "127.0.0.1" and db = ref "gotify.db" and root = ref "." in
@@ -31,6 +70,12 @@ let () =
   Mirage_crypto_rng_unix.use_default ();
   (try Sys.mkdir !Gotify_core.Images.dir 0o755 with Sys_error _ when Sys.file_exists !Gotify_core.Images.dir -> ());
   Gotify_core.Api.registration := Sys.getenv_opt "GOTIFY_REGISTRATION" = Some "true";
+  Gotify_core.Auth.secure_cookie := env_bool "GOTIFY_SERVER_SECURECOOKIE";
+  Gotify_core.Cors.response_headers := env_map "GOTIFY_SERVER_RESPONSEHEADERS";
+  Gotify_core.Cors.allow_origins := env_regexes "GOTIFY_SERVER_CORS_ALLOWORIGINS";
+  Gotify_core.Cors.allow_methods := env_list "GOTIFY_SERVER_CORS_ALLOWMETHODS";
+  Gotify_core.Cors.allow_headers := env_list "GOTIFY_SERVER_CORS_ALLOWHEADERS";
+  Gotify_core.Stream.allowed_origins := env_regexes "GOTIFY_SERVER_STREAM_ALLOWEDORIGINS";
   let file path = Filename.concat !root path in
   let dev = Sys.getenv_opt "YUKA_DEV" = Some "1" in
   let dir = file "_build/default/client/out" in
