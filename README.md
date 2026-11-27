@@ -49,7 +49,8 @@ that Yuka's `dune-project` lacks, and to make `Yuka.Async`, `Yuka.Browser` and
 
 ## Build and run
 
-The server needs a secret of at least 32 bytes, for its signed cookies:
+The server needs a secret of at least 32 bytes, which signs yuka-server's
+session and CSRF cookies:
 
 ```bash
 export YUKA_SECRET="$(openssl rand -hex 32)"
@@ -85,8 +86,9 @@ _build/default/server/main.exe [--port N] [--interface IP] [--db FILE] [--images
 
 Environment:
 
-- `YUKA_SECRET`: required, at least 32 bytes. Keep it the same across
-  restarts, or every browser is signed out.
+- `YUKA_SECRET`: required, at least 32 bytes. It signs yuka-server's
+  session and CSRF cookies, not the login: as in Gotify, the web UI is
+  signed in by its client's token, in the `gotify-client-token` cookie.
 - `GOTIFY_DEFAULTUSER_NAME`, `GOTIFY_DEFAULTUSER_PASS`: the first admin,
   created with an empty database (default `admin` / `admin`).
 - `GOTIFY_REGISTRATION=true`: lets anyone create a (non-admin) user, from the

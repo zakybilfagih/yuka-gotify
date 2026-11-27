@@ -1,16 +1,15 @@
-(* The web UI session: a Gotify client made at login, whose id is in a
-   cookie signed with the Yuka_server secret. Deleting that client (here,
-   from the REST API, or by expiry) logs the browser out. *)
+(* The web UI session, as Gotify's: a client made at login, whose private
+   token is the gotify-client-token cookie, which the REST API takes too.
+   Deleting that client (here, from the REST API, or by expiry) logs the
+   browser out. *)
 
 open Gotify_core
 module M = Gotify_core.Model
 
 let ( let* ) = Lwt.bind
-let sessions : Yuka_server.sessions option ref = ref None
 let secure = ref false
-let cookie_name = "gotify-ui"
+let cookie_name = Auth.cookie_name
 let theme_cookie = "gotify-theme"
-let the_sessions () = match !sessions with Some s -> s | None -> failwith "Ui.sessions not set"
 
 (** [apps]: the user's applications. The session that a page gets
     (Loaders.session) has none: the pages that show them take [~apps]
@@ -30,20 +29,22 @@ end)
 
 let page_apps : M.application list By_request.t = By_request.create 16
 
-let client_id req =
-  Option.bind (Yuka_server.Signed_cookie.get (the_sessions ()) req cookie_name) int_of_string_opt
+(** The stored (public) form of the session cookie's token. *)
+let client_token req =
+  match Yuka.Server.Request.cookie req cookie_name with
+  | Some t when t <> "" -> (
+      match Token.check ~now:(Int64.of_float (Unix.gettimeofday ())) t with Token.Valid p -> Some p | _ -> None)
+  | _ -> None
 
-(* Signed-in client id -> (user id, stored token), for the synchronous live
-   [allow]. Filled by [find], emptied when the client is deleted. *)
-let known : (int, int * string) Hashtbl.t = Hashtbl.create 16
+(* Stored token of a signed-in client -> its user id, for the synchronous
+   live [allow]. Filled by [find], emptied when the client is deleted. *)
+let known : (string, int) Hashtbl.t = Hashtbl.create 16
 
 let forget_token token =
-  let ids = Hashtbl.fold (fun id (_, t) acc -> if t = token then id :: acc else acc) known [] in
-  List.iter
-    (fun id ->
-      Hashtbl.remove known id;
-      Yuka.Server.Live.revoke (fun r -> client_id r = Some id))
-    ids
+  if Hashtbl.mem known token then begin
+    Hashtbl.remove known token;
+    Yuka.Server.Live.revoke (fun r -> client_token r = Some token)
+  end
 
 let () = Stream.on_client_deleted forget_token
 
@@ -54,31 +55,30 @@ let load_known () =
   Lwt_list.iter_s
     (fun (u : M.user) ->
       let* clients = Db.clients_of_user u.id in
-      List.iter (fun (c : M.client) -> Hashtbl.replace known c.id (u.id, c.token)) clients;
+      List.iter (fun (c : M.client) -> Hashtbl.replace known c.token u.id) clients;
       Lwt.return_unit)
     users
 
-let user_of_request req =
-  match client_id req with Some id -> Option.map fst (Hashtbl.find_opt known id) | None -> None
+let user_of_request req = Option.bind (client_token req) (Hashtbl.find_opt known)
 
 let theme req =
   match Yuka.Server.Request.cookie req theme_cookie with Some ("light" | "dark" as t) -> t | _ -> "system"
 
 (** The session of the request, or [None]. *)
 let find req =
-  match client_id req with
+  match client_token req with
   | None -> Lwt.return None
-  | Some id -> (
-      let* c = Db.client_by_id id in
+  | Some token -> (
+      let* c = Db.client_by_token token in
       match c with
-      | None -> Hashtbl.remove known id; Lwt.return None
+      | None -> Hashtbl.remove known token; Lwt.return None
       | Some client -> (
           let* () = if Auth.stale client.last_used then Db.client_used client.id else Lwt.return_unit in
           let* u = Db.user_by_id client.user_id in
           match u with
           | None -> Lwt.return None
           | Some user ->
-              Hashtbl.replace known client.id (user.id, client.token);
+              Hashtbl.replace known client.token user.id;
               let* apps = Db.apps_of_user user.id in
               Lwt.return (Some { user; client; apps; theme = theme req })))
 
