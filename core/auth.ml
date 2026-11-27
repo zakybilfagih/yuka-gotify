@@ -88,13 +88,16 @@ let by_user ?(check = fun _ -> true) reqd =
 let stale last = match last with None -> true | Some t -> t +. 300. < Unix.gettimeofday ()
 
 (* The stored form of the token, and a [touch] that marks it used: a cookie
-   is set again for another seven days, as Gotify does. *)
+   is set again for another seven days, as Gotify does. A signed token out of
+   its time window counts as no token. *)
 let canonical_token reqd =
   match token reqd with
   | None -> Result.Ok None
   | Some (t, from_cookie) -> (
-      match Token.canonical t with
-      | Result.Ok c ->
+      match Token.check ~now:(Int64.of_float (Unix.gettimeofday ())) t with
+      | Token.Stale -> Result.Ok None
+      | Token.Refused (code, m) -> Error (code, m)
+      | Token.Valid c ->
           let touch last used =
             if stale last then begin
               if from_cookie then set_cookie reqd t;
@@ -102,12 +105,11 @@ let canonical_token reqd =
             end
             else Lwt.return_unit
           in
-          Result.Ok (Some (c, touch))
-      | Error () -> Error ())
+          Result.Ok (Some (c, touch)))
 
 let by_client ?(admin = false) ?(elevated = false) reqd =
   match canonical_token reqd with
-  | Error () -> Lwt.return (Refuse (401, "cannot parse token"))
+  | Error (code, m) -> Lwt.return (Refuse (code, m))
   | Result.Ok None -> Lwt.return Skip
   | Result.Ok (Some (t, touch)) -> (
       let* c = Db.client_by_token t in
@@ -126,7 +128,7 @@ let by_client ?(admin = false) ?(elevated = false) reqd =
 
 let by_app reqd =
   match canonical_token reqd with
-  | Error () -> Lwt.return (Refuse (401, "cannot parse token"))
+  | Error (code, m) -> Lwt.return (Refuse (code, m))
   | Result.Ok None -> Lwt.return Skip
   | Result.Ok (Some (t, touch)) -> (
       let* a = Db.app_by_token t in

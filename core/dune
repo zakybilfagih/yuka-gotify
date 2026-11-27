@@ -22,4 +22,6 @@
   mirage-crypto-rng.unix
   safepass
   re
+  zarith
+  digestif
   unix))

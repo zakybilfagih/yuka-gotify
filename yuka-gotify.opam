@@ -29,6 +29,8 @@ depends: [
   "mirage-crypto-rng"
   "safepass"
   "re"
+  "zarith"
+  "digestif"
   "alcotest" {with-test}
   "odoc" {with-doc}
 ]

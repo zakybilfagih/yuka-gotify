@@ -106,7 +106,7 @@ let authentication () =
   status "wrong password" 401 (call ~auth:(basic "admin" "nope") "GET" "/current/user");
   let r = call "GET" "/current/user?token=gtfyc.zzz" in
   status "malformed token" 401 r;
-  Alcotest.(check string) "description" "cannot parse token" (str (json r) "errorDescription");
+  Alcotest.(check string) "description" "cannot parse token: private key must be 32 bytes" (str (json r) "errorDescription");
   let _, token = create_client "auth" in
   List.iter
     (fun (what, auth, path) ->
@@ -367,6 +367,40 @@ let session_cookie () =
   status "the same site is not" 200 (call ~headers:[ ("origin", "http://127.0.0.1") ] "GET" "/version");
   status "/health takes any site" 200 (call ~headers:[ ("origin", "http://evil.example") ] "GET" "/health")
 
+(* RFC 8032's Ed25519ph vector, and a token that Go's crypto/ed25519 signed
+   as Gotify's EnhancedToken.Sign does, for gtfyc.eXVrYS1n... at 1700000000. *)
+let signed_tokens () =
+  let hex h = String.init (String.length h / 2) (fun i -> Char.chr (int_of_string ("0x" ^ String.sub h (2 * i) 2))) in
+  let key = hex "ec172b93ad5e563bf4932c70e1245034c35467ef2efd4d64ebf819683467e2bf" in
+  let signature =
+    hex
+      "98a70222f0b8121aa9d30f813d683f809e462b469c7ff87639499bb94e6dae4131f85042463c2a355a2003d062adf5aaa10b8c61e636062aaad11c2a26083406"
+  in
+  Alcotest.(check bool) "the RFC vector verifies" true (Ed25519ph.verify ~key ~signature "abc");
+  Alcotest.(check bool) "not for another message" false (Ed25519ph.verify ~key ~signature "abd");
+  let signed =
+    "gtfyc.73Z1yd8iYw-RQZX3d9DnFZHntfk6A6SJ1XWtLUqTtIo.1700000000.6nHpuibE7vAShEbGzwYsVmPv-FpV-Oq-hRVx-Cvko1bqaZqr6nWUHHLHWmb4HyoKYUPp8jqDKF5uDlOctwwACA"
+  and public = "gtfyc.73Z1yd8iYw-RQZX3d9DnFZHntfk6A6SJ1XWtLUqTtIo" in
+  let show = function
+    | Token.Valid t -> "valid " ^ t
+    | Token.Stale -> "stale"
+    | Token.Refused (code, m) -> Printf.sprintf "%d %s" code m
+  in
+  let check what now token expected = Alcotest.(check string) what expected (show (Token.check ~now token)) in
+  check "the private form" 0L "gtfyc.eXVrYS1nb3RpZnkgc2lnbmVkIHRva2VuIHRlc3QhISE" ("valid " ^ public);
+  check "signed, at its time" 1700000000L signed ("valid " ^ public);
+  check "15 minutes later" 1700000900L signed ("valid " ^ public);
+  check "a second more" 1700000901L signed "stale";
+  check "15 minutes before" 1699999100L signed ("valid " ^ public);
+  check "a second more" 1699999099L signed "stale";
+  let forged = String.sub signed 0 (String.length signed - 2) ^ "AA" in
+  check "a forged signature" 1700000000L forged "500 invalid token";
+  check "another timestamp" 1700000000L
+    (String.concat "." [ public; "1700000001"; List.nth (String.split_on_char '.' signed) 3 ])
+    "500 invalid token";
+  check "three fields" 0L (public ^ ".1") "401 cannot parse token: token must have 2 or 4 fields separated by dots";
+  check "bad base64" 0L "gtfyc.AB*D" "401 cannot parse token: base64 decode failed: illegal base64 data at input byte 2"
+
 let last_admin () =
   let me = int (json (call ~auth:admin "GET" "/current/user")) "id" in
   let r = call ~auth:admin "DELETE" (Printf.sprintf "/user/%d" me) in
@@ -404,6 +438,7 @@ let () =
           test "stream delivers and closes" stream;
           test "application images" images;
           test "session cookie and other sites" session_cookie;
+          test "signed tokens" signed_tokens;
           test "the last admin stays" last_admin;
         ] );
     ]

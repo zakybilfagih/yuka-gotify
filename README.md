@@ -16,7 +16,7 @@ reconnect banner, Push message, drag to reorder applications, edit/delete/new
 token/elevate dialogs as overlays, token reveal with Copy, light and dark
 themes, and registration when enabled.
 
-Not implemented: plugins, OIDC and signed four-part tokens.
+Not implemented: plugins and OIDC.
 
 ## Requirements
 

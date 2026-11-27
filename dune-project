@@ -53,4 +53,6 @@
   mirage-crypto-rng
   safepass
   re
+  zarith
+  digestif
   (alcotest :with-test)))
