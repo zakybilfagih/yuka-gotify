@@ -102,6 +102,29 @@ Create an application in the web UI, then use its token as with Gotify:
 curl -H "X-Gotify-Key: <app token>" -d title=Hello -d message=World http://localhost:8080/message
 ```
 
+## Deploy
+
+[deploy/](deploy) has the Docker image that runs on Railway. It does not
+build anything: it takes the server built here, so build on a machine with
+glibc 2.42 or later. Put the build next to the two files, with `seed/`: the
+database and images that a new volume starts with, for example the `--db`
+file and `--images` directory of a local server.
+
+```bash
+make build && make -s bundle
+out=$(mktemp -d) && mkdir -p $out/app/_build/default/server $out/app/_build/default/client $out/seed
+cp deploy/Dockerfile deploy/entrypoint.sh $out/
+cp _build/default/server/main.exe $out/app/_build/default/server/
+cp _build/default/client/yuka_islands.json $out/app/_build/default/client/
+cp -r dist static $out/app/
+cp demo.db $out/seed/gotify.db && cp -r demo-images $out/seed/images
+cd $out && railway up --service yuka-gotify --no-gitignore --ci
+```
+
+The database and images live on the volume at `$DATA` (default `/data`).
+The first start copies `seed/` into it; later starts keep what is there.
+Set `YUKA_SECRET` on the service.
+
 ## Layout
 
 - `core/`: the Gotify REST API, `/stream`, auth and the SQLite store
@@ -110,6 +133,7 @@ curl -H "X-Gotify-Key: <app token>" -d title=Hello -d message=World http://local
 - `client/`: the browser entry point
 - `Routes.ml`: the web UI routes
 - `test/`: the API tests
+- `deploy/`: the Docker image for Railway
 
 ## License
 
